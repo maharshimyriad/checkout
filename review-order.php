@@ -17,6 +17,11 @@
 
 defined( 'ABSPATH' ) || exit;
 
+// Theme/plugins often add a second #place_order via these hooks — remove before payment.php runs.
+remove_all_actions( 'woocommerce_review_order_before_submit' );
+remove_all_actions( 'woocommerce_review_order_after_submit' );
+remove_all_actions( 'woocommerce_review_order_after_order_total' );
+
 // Coupon forms POST on full page load only — never during update_order_review AJAX.
 if ( ! wp_doing_ajax() ) {
 	if ( isset( $_POST['apply_coupon'] ) && ! empty( $_POST['coupon_code'] ) ) {
@@ -244,16 +249,15 @@ if ( ! wp_doing_ajax() ) {
 			<p class="secure-payment">Safe and Secure Payments.<br>Trusted Australian Industry Supplier.</p>
 		</div>
 
-        <?php do_action('woocommerce_review_order_after_order_total'); ?>
     </div>
 </div>
 
 <?php
-// Outside .woocommerce-checkout-review-order-table so update_order_review does not replace this button (prevents AJAX loops).
-$order_button_text = __( 'Pay Now', 'woocommerce' ) . ' ' . wp_strip_all_tags( wc_price( WC()->cart->get_total() ) );
+// Outside .woocommerce-checkout-review-order-table so update_order_review does not replace this button.
+$formatted_total   = wp_strip_all_tags( wc_price( WC()->cart->get_total( 'edit' ) ) );
+$order_button_text = __( 'Pay Now', 'woocommerce' ) . ' ' . $formatted_total;
 $button_class      = 'button alt' . ( wc_wp_theme_get_element_class_name( 'button' ) ? ' ' . esc_attr( wc_wp_theme_get_element_class_name( 'button' ) ) : '' );
-echo apply_filters(
-	'woocommerce_order_button_html',
-	'<div class="place-order" style="padding:0 30px;"><button style="width:100%;" type="submit" form="checkout" class="' . esc_attr( $button_class ) . '" name="woocommerce_checkout_place_order" id="place_order" value="' . esc_attr( $order_button_text ) . '" data-value="' . esc_attr( $order_button_text ) . '">' . esc_html( $order_button_text ) . '</button></div>'
-);
 ?>
+<div class="place-order fhs-checkout-place-order" style="padding:0 30px;">
+	<button type="submit" form="checkout" style="width:100%;" class="<?php echo esc_attr( $button_class ); ?>" name="woocommerce_checkout_place_order" id="place_order" value="<?php echo esc_attr( $order_button_text ); ?>" data-value="<?php echo esc_attr( $order_button_text ); ?>"><?php echo esc_html( $order_button_text ); ?></button>
+</div>
