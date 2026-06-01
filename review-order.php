@@ -17,34 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 ?>
-<?php 
 
-
-    if ( isset($_POST['apply_coupon']) && ! empty($_POST['coupon_code']) ) {
-        $coupon_code = sanitize_text_field($_POST['coupon_code']);
-        if ( WC()->cart->has_discount( $coupon_code ) ) {
-            wc_add_notice( 'Coupon applied.', 'notice' );
-        } else {
-            WC()->cart->apply_coupon( $coupon_code );
-            // wc_add_notice( 'Coupon applied!', 'success' );
-        }
-    }
-
-    if ( isset($_POST['remove_coupon']) ) {
-        foreach ( WC()->cart->get_applied_coupons() as $code ) {
-            WC()->cart->remove_coupon( $code );
-        }
-        wc_add_notice( 'Coupon removed.', 'notice' );
-    }
-
-    // ✅ Force WooCommerce to recalculate totals for accuracy
-    // Disable tax calculation for shipping (consistent with cart page)
-    add_filter( 'woocommerce_shipping_rate_taxes', '__return_empty_array' );
-    WC()->cart->calculate_totals();
-
-    ob_start();
-    wc_print_notices();
-?>
 <div class="woocommerce-checkout-review-order-grid woocommerce-checkout-review-order-table" style="display: grid; gap: 1rem;">
     <!-- Cart Items -->
     <div class="cart-items" style="display: grid; gap: 3rem;">
@@ -114,21 +87,7 @@ defined( 'ABSPATH' ) || exit;
     </div>
     
       <?php if ( WC()->cart->get_applied_coupons() ) : ?>
-      <div>
-        <form method="post" class="remove-form" style="display: flex; justify-content: start;">
-                   <?php foreach (WC()->cart->get_coupons() as $code => $coupon) : ?>
-            <div class="cart-discount coupon-<?php echo esc_attr(sanitize_title($code)); ?>" style="display: grid; grid-template-columns: 1fr auto 1fr; align-items:center; gap:5px;">
-               <span style="font-weight:500; font-size:1.4rem;" style="font-size:1.4rem;">Coupon: </strong>
-               <span><?php echo esc_html($coupon->get_code()); ?></span>
-                 <button class="remove-coupon-btn" type="submit" name="remove_coupon" style="padding: 0; background: none; color: red; width:fit-content; ">
-                <span class="icofont icofont-bin"></span> 
-            </button>
-            </div>
-        <?php endforeach; ?>
 
-        
-        </form>
-        </div>
     <?php else : ?>
     <div>
         <form method="post" class="coupon-form">
