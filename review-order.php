@@ -136,52 +136,8 @@ defined( 'ABSPATH' ) || exit;
 
 
         <!-- Shipping -->
-       <div style="padding-left: 30px !important;
-    padding-right: 30px !important;">
-<?php if ( WC()->cart->needs_shipping() && WC()->cart->show_shipping() ) : ?>
-
-    <?php
-    $packages = WC()->shipping()->get_packages();
-    $chosen_methods = WC()->session->get( 'chosen_shipping_methods' );
-    ?>
-
-    <?php foreach ( $packages as $i => $package ) : ?>
-        <?php if ( isset( $chosen_methods[ $i ] ) ) : ?>
-
-            <?php
-            $chosen_method = $package['rates'][ $chosen_methods[ $i ] ];
-            ?>
-
-            <div class="shipping-total" style="display:grid; grid-template-columns:1fr auto; padding:10px 0 0;">
-                
-                <span style="font-weight:500; font-size:1.4rem;">
-                    Shipping
-                </span>
-
-                <div>
-                    <?php echo wc_price( $chosen_method->cost ); ?>
-                    <span class="gst-message">(Inc GST)</span>
-                </div>
-                
-            </div>
-
-            <div class="shipping-method-label machship-message-container" style="padding: 0; font-size: 1.2rem; color: #666; text-align: right; width: 55%; margin-left: auto;">
-                <span class="machship-message-text"><?php echo esc_html( $chosen_method->label ); ?></span>
-            </div>
-
-        <?php endif; ?>
-    <?php endforeach; ?>
-
-<?php endif; ?>
-		</div>
 
         <!-- Fees -->
-        <?php foreach (WC()->cart->get_fees() as $fee) : ?>
-            <div class="fee" style="display: grid; grid-template-columns: 1fr auto;">
-                <span><?php echo esc_html($fee->name); ?></span>
-                <span><?php wc_cart_totals_fee_html($fee); ?></span>
-            </div>
-        <?php endforeach; ?>
 
 
 
