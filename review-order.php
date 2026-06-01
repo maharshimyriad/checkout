@@ -251,13 +251,3 @@ if ( ! wp_doing_ajax() ) {
 
     </div>
 </div>
-
-<?php
-// Outside .woocommerce-checkout-review-order-table so update_order_review does not replace this button.
-$formatted_total   = wp_strip_all_tags( wc_price( WC()->cart->get_total( 'edit' ) ) );
-$order_button_text = __( 'Pay Now', 'woocommerce' ) . ' ' . $formatted_total;
-$button_class      = 'button alt' . ( wc_wp_theme_get_element_class_name( 'button' ) ? ' ' . esc_attr( wc_wp_theme_get_element_class_name( 'button' ) ) : '' );
-?>
-<div class="place-order fhs-checkout-place-order" style="padding:0 30px;">
-	<button type="submit" form="checkout" style="width:100%;" class="<?php echo esc_attr( $button_class ); ?>" name="woocommerce_checkout_place_order" id="place_order" value="<?php echo esc_attr( $order_button_text ); ?>" data-value="<?php echo esc_attr( $order_button_text ); ?>"><?php echo esc_html( $order_button_text ); ?></button>
-</div>
