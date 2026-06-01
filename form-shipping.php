@@ -251,13 +251,15 @@ if (is_user_logged_in()) {
 			}) || methods[0];
 		};
 
-		const setShippingMethodForMode = function (mode) {
+		const setShippingMethodForMode = function (mode, silent) {
 			if (mode !== 'delivery' && mode !== 'pickup') return;
 			const target = getSelectedShippingMethodInput(mode);
 			if (!target || target.checked) return;
 
 			target.checked = true;
-			target.dispatchEvent(new Event('change', { bubbles: true }));
+			if (!silent) {
+				target.dispatchEvent(new Event('change', { bubbles: true }));
+			}
 		};
 
 		const queueCheckoutUpdate = function () {
@@ -334,20 +336,22 @@ if (is_user_logged_in()) {
 		};
 
 
-		const syncShippingStateWithBilling = function () {
+		const syncShippingStateWithBilling = function (options) {
+			const opts = options || {};
+			const silent = opts.silent === true;
 
 			const shippingState = document.getElementById('shipping_state');
 
 			if (!shippingState) return;
 
-
 			const storedValue = localStorage.getItem(STORAGE_KEY) || '';
-
 
 			if (shippingState.value !== storedValue) {
 				shippingState.value = storedValue;
 
-				shippingState.dispatchEvent(new Event('change', { bubbles: true }));
+				if (!silent) {
+					shippingState.dispatchEvent(new Event('change', { bubbles: true }));
+				}
 			}
 		};
 
@@ -492,9 +496,10 @@ if (is_user_logged_in()) {
 		if (window.jQuery) {
 			window.jQuery(document.body).on('updated_checkout', function () {
 				normalizeCountryLabels();
-				setShippingMethodForMode(modeInput ? modeInput.value : '');
+				// Silent sync only — firing change here causes infinite update_order_review loops.
+				setShippingMethodForMode(modeInput ? modeInput.value : '', true);
 				if (sameAsBilling && sameAsBilling.checked) {
-					syncShippingStateWithBilling();
+					syncShippingStateWithBilling({ silent: true });
 				}
 				ensureBillingAddressEditable();
 			});

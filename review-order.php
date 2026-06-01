@@ -173,7 +173,7 @@ if ( ! wp_doing_ajax() ) {
 <?php if ( WC()->cart->needs_shipping() && WC()->cart->show_shipping() ) : ?>
 
     <?php
-    $packages = WC()->shipping()->get_packages();
+    $packages       = WC()->shipping()->get_packages();
     $chosen_methods = WC()->session->get( 'chosen_shipping_methods' );
     ?>
 
@@ -205,6 +205,16 @@ if ( ! wp_doing_ajax() ) {
 
     <?php endforeach; ?>
 
+    <?php
+    // Keep shipping method inputs in the AJAX fragment (required by checkout.js).
+    // Visually hidden — custom labels above remain the visible UI.
+    ?>
+    <div class="fhs-shipping-methods-source" aria-hidden="true" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">
+        <?php do_action( 'woocommerce_review_order_before_shipping' ); ?>
+        <?php wc_cart_totals_shipping_html(); ?>
+        <?php do_action( 'woocommerce_review_order_after_shipping' ); ?>
+    </div>
+
 <?php endif; ?>
 		</div>
 
@@ -221,9 +231,10 @@ if ( ! wp_doing_ajax() ) {
         <?php do_action('woocommerce_review_order_before_order_total'); ?>
         
             <div class="cart-grandtotal" style="display: grid; grid-template-columns: 1fr auto;">
-        <p><span style="font-weight:500; font-size:1.6rem;">Grand Total:</strong></p>
-        <div style="font-weight:700;"><?php echo wc_price(WC()->cart->get_total('edit')); ?>
-        <span class="gst-message">(Inc GST)</span>
+        <p><span style="font-weight:500; font-size:1.6rem;">Grand Total:</span></p>
+        <div style="font-weight:700;">
+            <?php wc_cart_totals_order_total_html(); ?>
+            <span class="gst-message">(Inc GST)</span>
         </div>
         
     </div>
@@ -233,29 +244,16 @@ if ( ! wp_doing_ajax() ) {
 			<p class="secure-payment">Safe and Secure Payments.<br>Trusted Australian Industry Supplier.</p>
 		</div>
 
-
-        <!-- Place Order Button -->
-        <div class="place-order" style="padding:0 30px;">
-           <?php
-            $total = WC()->cart->get_total('edit'); // Get raw total
-            $formatted_total = strip_tags(wc_price($total)); // Get price text only (e.g., "$900.00")
-            $button_class = 'button alt' . (wc_wp_theme_get_element_class_name('button') ? ' ' . esc_attr(wc_wp_theme_get_element_class_name('button')) : '');
-            $button_text = esc_html__('Pay Now', 'woocommerce') . ' ' . $formatted_total;
-            $button_value = esc_attr($button_text);
-            
-            echo apply_filters(
-                'woocommerce_order_button_html',
-                '<button style="width:100%;" type="submit" 
-                    class="' . esc_attr($button_class) . '" 
-                    name="woocommerce_checkout_place_order" 
-                    id="place_order" 
-                    value="' . $button_value . '" 
-                    data-value="' . $button_value . '">' . $button_text . '</button>'
-            );
-            ?>
-
-        </div>
-
         <?php do_action('woocommerce_review_order_after_order_total'); ?>
     </div>
 </div>
+
+<?php
+// Outside .woocommerce-checkout-review-order-table so update_order_review does not replace this button (prevents AJAX loops).
+$order_button_text = __( 'Pay Now', 'woocommerce' ) . ' ' . wp_strip_all_tags( wc_price( WC()->cart->get_total() ) );
+$button_class      = 'button alt' . ( wc_wp_theme_get_element_class_name( 'button' ) ? ' ' . esc_attr( wc_wp_theme_get_element_class_name( 'button' ) ) : '' );
+echo apply_filters(
+	'woocommerce_order_button_html',
+	'<div class="place-order" style="padding:0 30px;"><button style="width:100%;" type="submit" form="checkout" class="' . esc_attr( $button_class ) . '" name="woocommerce_checkout_place_order" id="place_order" value="' . esc_attr( $order_button_text ) . '" data-value="' . esc_attr( $order_button_text ) . '">' . esc_html( $order_button_text ) . '</button></div>'
+);
+?>

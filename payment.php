@@ -52,8 +52,6 @@ if ( ! wp_doing_ajax() ) {
 
 		<?php do_action( 'woocommerce_review_order_before_submit' ); ?>
 
-	
-
 		<?php do_action( 'woocommerce_review_order_after_submit' ); ?>
 
 		<?php wp_nonce_field( 'woocommerce-process_checkout', 'woocommerce-process-checkout-nonce' ); ?>
