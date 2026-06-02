@@ -19,51 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/**
- * Keep billing suburb/state/postcode from the customer billing profile when checkout
- * AJAX incorrectly mirrors posted shipping values onto billing fields.
- */
-if ( ! function_exists( 'fhs_isolate_billing_checkout_values' ) ) {
-	function fhs_isolate_billing_checkout_values( $value, $input ) {
-		if ( 0 !== strpos( $input, 'billing_' ) || ! function_exists( 'WC' ) || ! WC()->customer ) {
-			return $value;
-		}
-
-		$getter = 'get_' . $input;
-		if ( ! is_callable( array( WC()->customer, $getter ) ) ) {
-			return $value;
-		}
-
-		$billing_from_customer = (string) WC()->customer->$getter();
-		if ( '' === $billing_from_customer ) {
-			return $value;
-		}
-
-		$shipping_input   = str_replace( 'billing_', 'shipping_', $input );
-		$shipping_getter  = 'get_' . $shipping_input;
-		$shipping_value   = '';
-		$shipping_posted  = null;
-
-		if ( is_callable( array( WC()->customer, $shipping_getter ) ) ) {
-			$shipping_value = (string) WC()->customer->$shipping_getter();
-		}
-
-		if ( isset( $_POST[ $shipping_input ] ) ) {
-			$shipping_posted = wc_clean( wp_unslash( $_POST[ $shipping_input ] ) );
-		}
-
-		$value_matches_shipping = ( '' !== (string) $value && (string) $value === $shipping_value )
-			|| ( null !== $shipping_posted && (string) $value === (string) $shipping_posted );
-
-		if ( $value_matches_shipping && $billing_from_customer !== (string) $value ) {
-			return $billing_from_customer;
-		}
-
-		return $value;
-	}
-
-	add_filter( 'woocommerce_checkout_get_value', 'fhs_isolate_billing_checkout_values', 99, 2 );
-}
+require_once __DIR__ . '/fhs-address-defaults.php';
 
 do_action( 'woocommerce_before_checkout_form', $checkout );
 
