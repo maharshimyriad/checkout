@@ -2,7 +2,6 @@
 defined('ABSPATH') || exit;
 
 $user_shipping_addresses = [];
-$default_shipping_key    = '';
 $fulfilment_mode         = '';
 
 if (WC()->session) {
@@ -17,39 +16,12 @@ if (!in_array($fulfilment_mode, ['delivery', 'pickup'], true)) {
 	$fulfilment_mode = '';
 }
 
-/**
- * Read a saved ThemeHigh address field (shipping_* keys).
- *
- * @param array  $address   Saved address entry.
- * @param string $field_key WooCommerce field key, e.g. shipping_city.
- */
-$fhs_get_saved_shipping_field_value = static function (array $address, string $field_key): string {
-	if (isset($address[ $field_key ]) && '' !== (string) $address[ $field_key ]) {
-		return (string) $address[ $field_key ];
-	}
-
-	$short_key = preg_replace('/^shipping_/', '', $field_key);
-	if (is_string($short_key) && $short_key !== $field_key && isset($address[ $short_key ]) && '' !== (string) $address[ $short_key ]) {
-		return (string) $address[ $short_key ];
-	}
-
-	return '';
-};
-
 if (is_user_logged_in()) {
 	$raw  = get_user_meta(get_current_user_id(), 'thwma_custom_address', true);
 	$data = maybe_unserialize($raw);
 
-	if (!is_array($data)) {
-		$data = is_array($raw) ? $raw : [];
-	}
-
-	if (!empty($data['shipping']) && is_array($data['shipping'])) {
+	if (is_array($data) && !empty($data['shipping']) && is_array($data['shipping'])) {
 		$user_shipping_addresses = $data['shipping'];
-	}
-
-	if (!empty($data['default_shipping'])) {
-		$default_shipping_key = (string) $data['default_shipping'];
 	}
 }
 ?>
@@ -58,15 +30,12 @@ if (is_user_logged_in()) {
 	data-current-mode="<?php echo esc_attr($fulfilment_mode); ?>">
 	<div class="fhs-fulfilment-toggle-wrap">
 		<button type="button" class="fhs-fulfilment-btn" data-mode="delivery" aria-pressed="false">
-			<!-- 			<i class="icofont-delivery-time"></i> -->
-			<img src="https://fhs.com.au/wp-content/uploads/2026/04/Delivery-Icon.png" style="height: 20px;">
-
+			<img src="https://fhs.com.au/wp-content/uploads/2026/04/Delivery-Icon.png" style="height: 20px;" alt="">
 			<span><?php esc_html_e('Delivery', 'woocommerce'); ?></span>
 		</button>
 		<span class="fhs-fulfilment-or"><?php esc_html_e('or', 'woocommerce'); ?></span>
 		<button type="button" class="fhs-fulfilment-btn" data-mode="pickup" aria-pressed="false">
-			<!-- 			<i class="icofont-worker"></i> -->
-			<img src="https://fhs.com.au/wp-content/uploads/2026/04/Pickup-Own-Freight-Icon.png" style="height: 20px;">
+			<img src="https://fhs.com.au/wp-content/uploads/2026/04/Pickup-Own-Freight-Icon.png" style="height: 20px;" alt="">
 			<span><?php esc_html_e('Pickup / Own Freight', 'woocommerce'); ?></span>
 		</button>
 	</div>
@@ -74,7 +43,7 @@ if (is_user_logged_in()) {
 	<input type="hidden" id="fhs_fulfilment_method" name="fhs_fulfilment_method"
 		value="<?php echo esc_attr($fulfilment_mode); ?>" />
 
-	<?php if (WC()->cart->needs_shipping_address()): ?>
+	<?php if (WC()->cart->needs_shipping_address()) : ?>
 		<div id="fhs-delivery-panel" class="fhs-mode-panel">
 			<div class="shipping_address">
 				<input type="hidden" id="ship_to_different_address" name="ship_to_different_address" value="1" />
@@ -83,15 +52,14 @@ if (is_user_logged_in()) {
 
 				<h3><?php esc_html_e('Shipping details', 'woocommerce'); ?></h3>
 
-				<?php if (!empty($user_shipping_addresses)): ?>
+				<?php if (!empty($user_shipping_addresses)) : ?>
 					<p class="form-row form-row-wide" id="thwma_saved_shipping_field">
 						<label for="thwma_saved_shipping"><?php esc_html_e('Address Book', 'woocommerce'); ?></label>
 						<span class="woocommerce-input-wrapper">
-							<select id="thwma_saved_shipping" class="select" style="width:100%;">
+							<select id="thwma_saved_shipping" class="select" style="width:100%;" disabled
+								title="<?php esc_attr_e('Temporarily disabled while checkout address sync is rebuilt.', 'woocommerce'); ?>">
 								<option value=""><?php esc_html_e('Select an address', 'woocommerce'); ?></option>
-								<option value="same_as_billing"><?php esc_html_e('Same as billing address', 'woocommerce'); ?>
-								</option>
-								<?php foreach ($user_shipping_addresses as $key => $address): ?>
+								<?php foreach ($user_shipping_addresses as $key => $address) : ?>
 									<?php
 									$label = !empty($address['shipping_heading'])
 										? $address['shipping_heading']
@@ -109,14 +77,14 @@ if (is_user_logged_in()) {
 				<label class="woocommerce-form__label woocommerce-form__label-for-checkbox checkbox same-as-billing-toggle">
 					<input id="fhs-use-same-as-billing-address-checkbox"
 						class="woocommerce-form__input woocommerce-form__input-checkbox input-checkbox" type="checkbox"
-						name="fhs_use_same_as_billing_address" value="1" />
+						name="fhs_use_same_as_billing_address" value="1" disabled
+						title="<?php esc_attr_e('Temporarily disabled while checkout address sync is rebuilt.', 'woocommerce'); ?>" />
 					<span><?php esc_html_e('Use same as billing address', 'woocommerce'); ?></span>
 				</label>
 
 				<div class="shipping-options-row">
 					<div class="residential-delivery-group">
-						<span
-							class="residential-delivery-label"><?php esc_html_e('Is this a Residential delivery?', 'woocommerce'); ?></span>
+						<span class="residential-delivery-label"><?php esc_html_e('Is this a Residential delivery?', 'woocommerce'); ?></span>
 						<label>
 							<input type="radio" name="residential_delivery" value="yes">
 							<?php esc_html_e('Yes', 'woocommerce'); ?>
@@ -135,25 +103,25 @@ if (is_user_logged_in()) {
 					unset($fields['shipping_address_2'], $fields['shipping_company']);
 
 					$shipping_field_order = [
-						'shipping_first_name' => 10,
-						'shipping_last_name' => 20,
-						'shipping_address_1' => 30,
-						'shipping_city' => 40,
-						'shipping_state' => 50,
-						'shipping_postcode' => 60,
-						'shipping_country' => 70,
+						'shipping_first_name'  => 10,
+						'shipping_last_name'   => 20,
+						'shipping_address_1'   => 30,
+						'shipping_city'        => 40,
+						'shipping_state'       => 50,
+						'shipping_postcode'    => 60,
+						'shipping_country'     => 70,
 					];
 
 					foreach ($fields as $key => $field) {
-						$field['placeholder'] = '';
+						$field['placeholder']       = '';
 						$field['input_placeholder'] = '';
 
 						if (!empty($field['custom_attributes']['data-placeholder'])) {
 							$field['custom_attributes']['data-placeholder'] = '';
 						}
 
-						if (isset($shipping_field_order[$key])) {
-							$field['priority'] = $shipping_field_order[$key];
+						if (isset($shipping_field_order[ $key ])) {
+							$field['priority'] = $shipping_field_order[ $key ];
 						}
 
 						if ('shipping_country' === $key) {
@@ -164,47 +132,12 @@ if (is_user_logged_in()) {
 							$field['label'] = esc_html__('Address', 'woocommerce');
 						}
 
-						$value = $checkout->get_value($key);
-
-						if (
-							$default_shipping_key
-							&& !empty($user_shipping_addresses[ $default_shipping_key ])
-							&& is_array($user_shipping_addresses[ $default_shipping_key ])
-						) {
-							$saved_value = $fhs_get_saved_shipping_field_value(
-								$user_shipping_addresses[ $default_shipping_key ],
-								$key
-							);
-							if ('' !== $saved_value) {
-								$value = $saved_value;
-							}
-						}
-
-						if ('' === (string) $value && WC()->customer) {
-							$getter = 'get_' . $key;
-							if (is_callable(array(WC()->customer, $getter))) {
-								$customer_value = (string) WC()->customer->$getter();
-								if ('' !== $customer_value) {
-									$value = $customer_value;
-								}
-							}
-							if ('' === (string) $value && in_array($key, array('shipping_country', 'shipping_state'), true)) {
-								$billing_getter = 'get_billing_' . substr($key, 9);
-								if (is_callable(array(WC()->customer, $billing_getter))) {
-									$billing_value = (string) WC()->customer->$billing_getter();
-									if ('' !== $billing_value) {
-										$value = $billing_value;
-									}
-								}
-							}
-						}
-
-						woocommerce_form_field($key, $field, $value);
+						woocommerce_form_field($key, $field, $checkout->get_value($key));
 					}
 					?>
 				</div>
 
-				<?php if (is_user_logged_in()): ?>
+				<?php if (is_user_logged_in()) : ?>
 					<p class="form-row form-row-wide fhs-save-address-book-row">
 						<label class="woocommerce-form__label woocommerce-form__label-for-checkbox checkbox">
 							<input class="woocommerce-form__input woocommerce-form__input-checkbox input-checkbox"
@@ -222,7 +155,6 @@ if (is_user_logged_in()) {
 	<div id="fhs-pickup-panel" class="fhs-mode-panel fhs-pickup-panel">
 		<p><strong><?php esc_html_e('Pickup from FHS Poly:', 'woocommerce'); ?></strong> 11-15 Martha Street, Seaford,
 			Victoria Australia 3198</p>
-		<!-- 		<p><strong><?php esc_html_e('Standard Opening Hours', 'woocommerce'); ?></strong> <?php esc_html_e('are Monday-Thursday 7:30am-4:30pm, Friday 7:30am-3pm. Public Holidays Forklift loading available (only until 1pm Fridays)', 'woocommerce'); ?></p> -->
 		<p><strong><?php esc_html_e('Standard Opening Hours', 'woocommerce'); ?></strong>
 			<?php esc_html_e('are Monday-Thursday 7.30am-4.30pm, Friday 7.30am-3pm. Closed Public Holidays.', 'woocommerce'); ?>
 		</p>
@@ -237,13 +169,13 @@ if (is_user_logged_in()) {
 <div class="woocommerce-additional-fields">
 	<?php do_action('woocommerce_before_order_notes', $checkout); ?>
 
-	<?php if (apply_filters('woocommerce_enable_order_notes_field', 'yes' === get_option('woocommerce_enable_order_comments', 'yes'))): ?>
-		<?php if (!WC()->cart->needs_shipping() || wc_ship_to_billing_address_only()): ?>
+	<?php if (apply_filters('woocommerce_enable_order_notes_field', 'yes' === get_option('woocommerce_enable_order_comments', 'yes'))) : ?>
+		<?php if (!WC()->cart->needs_shipping() || wc_ship_to_billing_address_only()) : ?>
 			<h3><?php esc_html_e('Additional information', 'woocommerce'); ?></h3>
 		<?php endif; ?>
 
 		<div class="woocommerce-additional-fields__field-wrapper">
-			<?php foreach ($checkout->get_checkout_fields('order') as $key => $field): ?>
+			<?php foreach ($checkout->get_checkout_fields('order') as $key => $field) : ?>
 				<?php woocommerce_form_field($key, $field, $checkout->get_value($key)); ?>
 			<?php endforeach; ?>
 		</div>
@@ -254,238 +186,22 @@ if (is_user_logged_in()) {
 
 <script>
 	document.addEventListener('DOMContentLoaded', function () {
-		const STORAGE_KEY = 'checkout_state';
-		const SHIPPING_SYNC_PAIRS = [
-			['billing_first_name', 'shipping_first_name'],
-			['billing_last_name', 'shipping_last_name'],
-			['billing_address_1', 'shipping_address_1'],
-			['billing_city', 'shipping_city'],
-			['billing_postcode', 'shipping_postcode']
-		];
-		const SHIPPING_ADDRESS_FIELDS = ['first_name', 'last_name', 'address_1', 'city', 'postcode', 'country', 'state'];
-
 		const root = document.querySelector('.fhs-checkout-flow');
-		if (!root) return;
+		if (!root) {
+			return;
+		}
 
 		const modeInput = document.getElementById('fhs_fulfilment_method');
 		const buttons = root.querySelectorAll('.fhs-fulfilment-btn');
 		const deliveryPanel = document.getElementById('fhs-delivery-panel');
 		const pickupPanel = document.getElementById('fhs-pickup-panel');
-		const sameAsBilling = document.getElementById('fhs-use-same-as-billing-address-checkbox');
-		const savedShipping = document.getElementById('thwma_saved_shipping');
 		const shipToDifferent = document.getElementById('ship_to_different_address');
-		const billingFieldIds = [
-			'billing_first_name',
-			'billing_last_name',
-			'billing_country',
-			'billing_address_1',
-			'billing_city',
-			'billing_state',
-			'billing_postcode'
-		];
-		let syncGuardTimer = null;
-		let countrySyncTimer = null;
-
-		const savedData = <?php echo wp_json_encode($user_shipping_addresses); ?>;
-		const defaultShippingKey = <?php echo wp_json_encode($default_shipping_key); ?>;
-		// Only re-apply via JS after the customer picks from the address book (not on every AJAX refresh).
-		let selectedSavedShippingKey = '';
-
-		const getCheckoutFieldValue = function (fieldId) {
-			const el = document.getElementById(fieldId);
-			if (!el) return '';
-			if (window.jQuery) {
-				return window.jQuery(el).val() || '';
-			}
-			return el.value || '';
-		};
-
-		const setCheckoutFieldValue = function (fieldId, value, silent) {
-			const el = document.getElementById(fieldId);
-			if (!el) return;
-			const val = value != null ? String(value) : '';
-			// Never wipe populated fields with an empty value during silent/AJAX sync.
-			if ('' === val && silent && getCheckoutFieldValue(fieldId)) {
-				return;
-			}
-			if (window.jQuery) {
-				const $el = window.jQuery(el);
-				if ($el.val() !== val) {
-					$el.val(val);
-				}
-				if (!silent) {
-					$el.trigger('change');
-				}
-			} else {
-				el.value = val;
-				if (!silent) {
-					el.dispatchEvent(new Event('change', { bubbles: true }));
-				}
-			}
-		};
-
-		const syncBillingStateToStorage = function () {
-			const current = getCheckoutFieldValue('billing_state');
-			if (current) {
-				localStorage.setItem(STORAGE_KEY, current);
-			}
-		};
-
-		const restoreBillingStateFromStorage = function () {
-			const stored = localStorage.getItem(STORAGE_KEY) || '';
-			if (!stored) {
-				return;
-			}
-			if (!getCheckoutFieldValue('billing_state')) {
-				setCheckoutFieldValue('billing_state', stored, true);
-			}
-		};
-
-		const isSameAsBillingActive = function () {
-			return !!(sameAsBilling && sameAsBilling.checked);
-		};
-
-		const bindBillingStateStorage = function () {
-			const billingStateElement = document.getElementById('billing_state');
-			if (!billingStateElement) return;
-
-			if (getCheckoutFieldValue('billing_state')) {
-				syncBillingStateToStorage();
-			}
-
-			if (!window.jQuery) return;
-
-			const $el = window.jQuery(billingStateElement);
-			$el.off('select2:select.fhsBillingState change.fhsBillingState');
-			$el.on('select2:select.fhsBillingState change.fhsBillingState', function (e) {
-				const value = e.target.value || '';
-				localStorage.setItem(STORAGE_KEY, value);
-				if (isSameAsBillingActive()) {
-					setCheckoutFieldValue('shipping_state', value, true);
-				}
-			});
-		};
-
-		const setShippingCountryThenState = function (country, state, silent, done) {
-			const finish = function () {
-				if (state) {
-					setCheckoutFieldValue('shipping_state', state, silent);
-				}
-				if (typeof done === 'function') {
-					done();
-				}
-			};
-
-			if (!country) {
-				finish();
-				return;
-			}
-
-			// After updated_checkout, set values directly — triggering country change causes AJAX loops.
-			if (silent) {
-				setCheckoutFieldValue('shipping_country', country, true);
-				finish();
-				return;
-			}
-
-			if (!window.jQuery) {
-				setCheckoutFieldValue('shipping_country', country, false);
-				finish();
-				return;
-			}
-
-			const $body = window.jQuery(document.body);
-			const $shippingCountry = window.jQuery('#shipping_country');
-			const currentCountry = getCheckoutFieldValue('shipping_country');
-
-			if (currentCountry === country) {
-				finish();
-				return;
-			}
-
-			if (countrySyncTimer) {
-				window.clearTimeout(countrySyncTimer);
-			}
-
-			const onCountryChanged = function () {
-				$body.off('country_to_state_changed.fhsShippingSync', onCountryChanged);
-				if (countrySyncTimer) {
-					window.clearTimeout(countrySyncTimer);
-					countrySyncTimer = null;
-				}
-				window.setTimeout(finish, 50);
-			};
-
-			$body.on('country_to_state_changed.fhsShippingSync', onCountryChanged);
-			countrySyncTimer = window.setTimeout(function () {
-				$body.off('country_to_state_changed.fhsShippingSync', onCountryChanged);
-				countrySyncTimer = null;
-				finish();
-			}, 600);
-
-			$shippingCountry.val(country).trigger('change');
-		};
-
-		const getSavedAddressFieldValue = function (address, field) {
-			if (!address) return '';
-			const shippingKey = 'shipping_' + field;
-			if (Object.prototype.hasOwnProperty.call(address, shippingKey) && address[shippingKey] !== '') {
-				return address[shippingKey];
-			}
-			if (Object.prototype.hasOwnProperty.call(address, field) && address[field] !== '') {
-				return address[field];
-			}
-			return '';
-		};
-
-		const applySavedAddress = function (key, options) {
-			const opts = options || {};
-			const silent = opts.silent === true;
-			const queueUpdate = opts.queueUpdate === true;
-
-			if (!key || key === 'same_as_billing' || !savedData[key]) {
-				return;
-			}
-
-			const selected = savedData[key];
-			selectedSavedShippingKey = key;
-
-			if (sameAsBilling) {
-				sameAsBilling.checked = false;
-			}
-
-			if (savedShipping) {
-				savedShipping.value = key;
-			}
-
-			const hiddenShippingKey = document.getElementById('thmaf_hidden_field_shipping');
-			if (hiddenShippingKey) {
-				hiddenShippingKey.value = key;
-			}
-
-			const country = getSavedAddressFieldValue(selected, 'country');
-			const state = getSavedAddressFieldValue(selected, 'state');
-
-			SHIPPING_ADDRESS_FIELDS.forEach(function (field) {
-				if (field === 'country' || field === 'state') {
-					return;
-				}
-				const savedValue = getSavedAddressFieldValue(selected, field);
-				if (savedValue) {
-					setCheckoutFieldValue('shipping_' + field, savedValue, silent);
-				}
-			});
-
-			setShippingCountryThenState(country, state, silent, function () {
-				if (queueUpdate) {
-					queueCheckoutUpdate();
-				}
-			});
-		};
 
 		const getSelectedShippingMethodInput = function (mode) {
 			const methods = Array.from(document.querySelectorAll('input[name^="shipping_method"]'));
-			if (!methods.length) return null;
+			if (!methods.length) {
+				return null;
+			}
 
 			const pickupMethod = methods.find(function (input) {
 				return /local_pickup|pickup/i.test(String(input.value || ''));
@@ -501,41 +217,26 @@ if (is_user_logged_in()) {
 		};
 
 		const setShippingMethodForMode = function (mode, silent) {
-			if (mode !== 'delivery' && mode !== 'pickup') return;
+			if (mode !== 'delivery' && mode !== 'pickup') {
+				return;
+			}
 			const target = getSelectedShippingMethodInput(mode);
-			if (!target || target.checked) return;
-
+			if (!target || target.checked) {
+				return;
+			}
 			target.checked = true;
 			if (!silent) {
 				target.dispatchEvent(new Event('change', { bubbles: true }));
 			}
 		};
 
-		const queueCheckoutUpdate = function () {
-			if (!window.jQuery) return;
-			if (syncGuardTimer) {
-				window.clearTimeout(syncGuardTimer);
-			}
-			syncGuardTimer = window.setTimeout(function () {
-				window.fhsAllowBillingTriggeredCheckoutUntil = Date.now() + 1200;
-				window.jQuery(document.body).trigger('update_checkout');
-			}, 120);
-		};
-
-		const ensureBillingAddressEditable = function () {
-			billingFieldIds.forEach(function (fieldId) {
-				const field = document.getElementById(fieldId);
-				if (!field) return;
-				field.disabled = false;
-				field.readOnly = false;
-			});
-		};
-
 		const toggleShippingFieldState = function (enabled) {
-			if (!deliveryPanel) return;
+			if (!deliveryPanel) {
+				return;
+			}
 
 			const shippingFields = deliveryPanel.querySelectorAll(
-				'input[name^="shipping_"], select[name^="shipping_"], textarea[name^="shipping_"], input[name="residential_delivery"], input[name="save_shipping_to_address_book"], input[name="fhs_use_same_as_billing_address"], #thwma_saved_shipping'
+				'input[name^="shipping_"], select[name^="shipping_"], textarea[name^="shipping_"], input[name="residential_delivery"], input[name="save_shipping_to_address_book"]'
 			);
 
 			shippingFields.forEach(function (field) {
@@ -544,7 +245,10 @@ if (is_user_logged_in()) {
 		};
 
 		const setMode = function (mode) {
-			if (!modeInput) return;
+			if (!modeInput) {
+				return;
+			}
+
 			const activeMode = mode === 'pickup' ? 'pickup' : 'delivery';
 			modeInput.value = activeMode;
 
@@ -566,69 +270,6 @@ if (is_user_logged_in()) {
 			setShippingMethodForMode(activeMode);
 		};
 
-
-		const syncShippingWithBilling = function (options) {
-			if (!isSameAsBillingActive()) {
-				return;
-			}
-
-			const opts = options || {};
-			const silent = opts.silent === true;
-			const queueUpdate = opts.queueUpdate !== false;
-
-			SHIPPING_SYNC_PAIRS.forEach(function (pair) {
-				setCheckoutFieldValue(pair[1], getCheckoutFieldValue(pair[0]), silent);
-			});
-
-			const billingCountry = getCheckoutFieldValue('billing_country');
-			const billingState = getCheckoutFieldValue('billing_state');
-			syncBillingStateToStorage();
-
-			setShippingCountryThenState(billingCountry, billingState, silent, function () {
-				if (queueUpdate) {
-					queueCheckoutUpdate();
-				}
-				ensureBillingAddressEditable();
-			});
-		};
-
-		const fillEmptyShippingCountryState = function () {
-			const billingCountry = getCheckoutFieldValue('billing_country');
-			const billingState = getCheckoutFieldValue('billing_state');
-			const shippingCountry = getCheckoutFieldValue('shipping_country');
-
-			if (isSameAsBillingActive() && billingCountry) {
-				setShippingCountryThenState(
-					billingCountry,
-					billingState,
-					true,
-					function () {}
-				);
-				return;
-			}
-
-			if (!shippingCountry && billingCountry) {
-				return;
-			}
-
-			if (shippingCountry && !getCheckoutFieldValue('shipping_state') && billingState) {
-				setCheckoutFieldValue('shipping_state', billingState, true);
-			}
-		};
-
-		const normalizeCountryLabels = function () {
-			['billing_country', 'shipping_country'].forEach(function (fieldId) {
-				const label = document.querySelector('label[for="' + fieldId + '"]');
-				if (!label) return;
-
-				label.childNodes.forEach(function (node) {
-					if (node.nodeType === Node.TEXT_NODE && node.nodeValue.indexOf('Country / Region') !== -1) {
-						node.nodeValue = node.nodeValue.replace('Country / Region', 'Country');
-					}
-				});
-			});
-		};
-
 		buttons.forEach(function (button) {
 			button.addEventListener('click', function () {
 				setMode(button.getAttribute('data-mode'));
@@ -638,112 +279,16 @@ if (is_user_logged_in()) {
 			});
 		});
 
-		if (savedShipping) {
-			savedShipping.addEventListener('change', function () {
-				const key = this.value;
-
-				if (key === 'same_as_billing') {
-					selectedSavedShippingKey = '';
-					if (sameAsBilling) {
-						sameAsBilling.checked = true;
-						syncShippingWithBilling();
-					}
-					ensureBillingAddressEditable();
-					return;
-				}
-
-				if (!key || !savedData[key]) {
-					selectedSavedShippingKey = '';
-					return;
-				}
-
-				applySavedAddress(key, { queueUpdate: true });
-				ensureBillingAddressEditable();
-			});
-		}
-
-		if (sameAsBilling) {
-			sameAsBilling.addEventListener('change', function () {
-				if (this.checked) {
-					selectedSavedShippingKey = '';
-					if (savedShipping) {
-						savedShipping.value = '';
-					}
-					const hiddenShippingKey = document.getElementById('thmaf_hidden_field_shipping');
-					if (hiddenShippingKey) {
-						hiddenShippingKey.value = '';
-					}
-					syncShippingWithBilling();
-				}
-				ensureBillingAddressEditable();
-			});
-		}
-
-		document.addEventListener('input', function (event) {
-			if (!event.target) return;
-			const targetId = String(event.target.id || '');
-			if (targetId === 'billing_state') {
-				syncBillingStateToStorage();
-			}
-			if (!isSameAsBillingActive()) return;
-			if (targetId.startsWith('billing_')) {
-				// Avoid per-keystroke checkout AJAX; sync values only.
-				syncShippingWithBilling({ queueUpdate: false, silent: true });
-				ensureBillingAddressEditable();
-			}
-		});
-
-		document.addEventListener('change', function (event) {
-			if (!event.target) return;
-			const targetId = String(event.target.id || '');
-			if (targetId === 'billing_state') {
-				syncBillingStateToStorage();
-			}
-			if (!isSameAsBillingActive()) return;
-			if (targetId.startsWith('billing_')) {
-				syncShippingWithBilling({ queueUpdate: targetId === 'billing_country' || targetId === 'billing_state' });
-				return;
-			}
-			if (targetId.startsWith('shipping_')) {
-				// Keep shipping aligned with billing when "same as billing" is enabled.
-				window.setTimeout(function () {
-					syncShippingWithBilling({ queueUpdate: false, silent: true });
-					ensureBillingAddressEditable();
-				}, 0);
-			}
-		});
-
 		if (shipToDifferent) {
 			shipToDifferent.value = '1';
 		}
 
-		normalizeCountryLabels();
-		bindBillingStateStorage();
-
 		if (window.jQuery) {
-			window.jQuery(document.body).on('updated_checkout.fhsCheckout', function () {
-				normalizeCountryLabels();
-				bindBillingStateStorage();
-				restoreBillingStateFromStorage();
-				// Silent sync only — firing change here causes infinite update_order_review loops.
+			window.jQuery(document.body).on('updated_checkout.fhsFulfilment', function () {
 				setShippingMethodForMode(modeInput ? modeInput.value : 'delivery', true);
-				if (isSameAsBillingActive()) {
-					syncShippingWithBilling({ queueUpdate: false, silent: true });
-				} else if (selectedSavedShippingKey && savedData[selectedSavedShippingKey]) {
-					applySavedAddress(selectedSavedShippingKey, { silent: true });
-				} else {
-					fillEmptyShippingCountryState();
-				}
-				ensureBillingAddressEditable();
 			});
 		}
 
 		setMode(modeInput && modeInput.value ? modeInput.value : 'delivery');
-
-		if (defaultShippingKey && savedData[defaultShippingKey] && savedShipping) {
-			savedShipping.value = defaultShippingKey;
-		}
-
-		ensureBillingAddressEditable();
 	});
 </script>
