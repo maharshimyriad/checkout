@@ -111,26 +111,26 @@ if ( ! wp_doing_ajax() ) {
     
       <?php if ( WC()->cart->get_applied_coupons() ) : ?>
       <div>
-        <form method="post" class="remove-form" style="display: flex; justify-content: start;">
+        <div class="remove-form" style="display: flex; justify-content: start;">
                    <?php foreach (WC()->cart->get_coupons() as $code => $coupon) : ?>
             <div class="cart-discount coupon-<?php echo esc_attr(sanitize_title($code)); ?>" style="display: grid; grid-template-columns: 1fr auto 1fr; align-items:center; gap:5px;">
                <span style="font-weight:500; font-size:1.4rem;" style="font-size:1.4rem;">Coupon: </strong>
                <span><?php echo esc_html($coupon->get_code()); ?></span>
-                 <button class="remove-coupon-btn" type="submit" name="remove_coupon" style="padding: 0; background: none; color: red; width:fit-content; ">
+                 <button class="remove-coupon-btn" type="button" name="remove_coupon" value="<?php echo esc_attr( $coupon->get_code() ); ?>" style="padding: 0; background: none; color: red; width:fit-content; ">
                 <span class="icofont icofont-bin"></span> 
             </button>
             </div>
         <?php endforeach; ?>
 
         
-        </form>
+        </div>
         </div>
     <?php else : ?>
     <div>
-        <form method="post" class="coupon-form">
+        <div class="coupon-form">
             <input type="text" name="coupon_code" placeholder="Discount Code" required>
-            <button type="submit" name="apply_coupon">Apply</button>
-        </form>
+            <button type="button" name="apply_coupon">Apply</button>
+        </div>
         </div>
     <?php endif; ?>
 
@@ -147,6 +147,82 @@ if ( ! wp_doing_ajax() ) {
 
 
 </div>
+
+<script>
+(function ($) {
+	if (!$ || typeof wc_checkout_params === 'undefined') {
+		return;
+	}
+
+	function getWcAjaxUrl(endpoint) {
+		return wc_checkout_params.wc_ajax_url.toString().replace('%%endpoint%%', endpoint);
+	}
+
+	function refreshCheckoutAfterCoupon(response) {
+		if (response) {
+			$('.woocommerce-NoticeGroup-checkout, .woocommerce-error, .woocommerce-message').remove();
+			$('.woocommerce-notices-wrapper:first').html(response);
+		}
+
+		$(document.body).trigger('update_checkout');
+	}
+
+	$(document.body)
+		.off('click.fhsCheckoutCouponApply')
+		.on('click.fhsCheckoutCouponApply', '.coupon-form button[name="apply_coupon"]', function (event) {
+			event.preventDefault();
+
+			var $button = $(this);
+			var $coupon = $button.closest('.coupon-form').find('input[name="coupon_code"]');
+			var couponCode = $.trim($coupon.val() || '');
+
+			if (!couponCode) {
+				return;
+			}
+
+			$button.prop('disabled', true);
+
+			$.ajax({
+				type: 'POST',
+				url: getWcAjaxUrl('apply_coupon'),
+				data: {
+					security: wc_checkout_params.apply_coupon_nonce,
+					coupon_code: couponCode
+				},
+				complete: function () {
+					$button.prop('disabled', false);
+				},
+				success: refreshCheckoutAfterCoupon
+			});
+		})
+		.off('click.fhsCheckoutCouponRemove')
+		.on('click.fhsCheckoutCouponRemove', '.remove-coupon-btn[name="remove_coupon"]', function (event) {
+			event.preventDefault();
+
+			var $button = $(this);
+			var couponCode = $button.val();
+
+			if (!couponCode) {
+				return;
+			}
+
+			$button.prop('disabled', true);
+
+			$.ajax({
+				type: 'POST',
+				url: getWcAjaxUrl('remove_coupon'),
+				data: {
+					security: wc_checkout_params.remove_coupon_nonce,
+					coupon: couponCode
+				},
+				complete: function () {
+					$button.prop('disabled', false);
+				},
+				success: refreshCheckoutAfterCoupon
+			});
+		});
+})(window.jQuery);
+</script>
 
         
         
@@ -185,6 +261,10 @@ if ( ! wp_doing_ajax() ) {
     <?php foreach ( $packages as $i => $package ) : ?>
         <?php
         $chosen_rate_id = isset( $chosen_methods[ $i ] ) ? $chosen_methods[ $i ] : '';
+        if ( ! $chosen_rate_id || empty( $package['rates'][ $chosen_rate_id ] ) ) {
+            $chosen_rate_id = ! empty( $package['rates'] ) ? key( $package['rates'] ) : '';
+        }
+
         if ( ! $chosen_rate_id || empty( $package['rates'][ $chosen_rate_id ] ) ) {
             continue;
         }
