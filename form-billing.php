@@ -111,7 +111,7 @@ $fhs_billing_defaults = fhs_get_billing_defaults_for_js();
 				}
 
 				if ($state.hasClass('select2-hidden-accessible')) {
-					$state.trigger('change');
+					$state.trigger('change.select2');
 				}
 			} else {
 				state.disabled = false;
@@ -128,19 +128,6 @@ $fhs_billing_defaults = fhs_get_billing_defaults_for_js();
 
 			stateRefreshTimer = window.setTimeout(function () {
 				stateRefreshTimer = null;
-				var state = document.getElementById('billing_state');
-				var hasDisabledStateOptions = false;
-
-				if (window.jQuery && state) {
-					hasDisabledStateOptions = window.jQuery(state).find('option[value!=""]:disabled').length > 0;
-				}
-
-				if (window.jQuery && document.getElementById('billing_country') && state && (state.disabled || hasDisabledStateOptions)) {
-					window.jQuery('#billing_country').trigger('change');
-					window.setTimeout(restoreBillingStateControl, 50);
-					return;
-				}
-
 				restoreBillingStateControl();
 			}, 50);
 		}
