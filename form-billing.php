@@ -99,7 +99,8 @@ $fhs_billing_defaults = fhs_get_billing_defaults_for_js();
 			if (window.jQuery) {
 				var $state = window.jQuery(state);
 
-				if ($state.is('select') && $state.find('option').length > 1) {
+				if ($state.is('select')) {
+					$state.find('option[value!=""]').prop('disabled', false);
 					$state.prop('disabled', false);
 				} else if (!$state.is('select')) {
 					$state.prop('disabled', false);
@@ -110,7 +111,7 @@ $fhs_billing_defaults = fhs_get_billing_defaults_for_js();
 				}
 
 				if ($state.hasClass('select2-hidden-accessible')) {
-					$state.trigger('change.select2');
+					$state.trigger('change');
 				}
 			} else {
 				state.disabled = false;
@@ -128,8 +129,13 @@ $fhs_billing_defaults = fhs_get_billing_defaults_for_js();
 			stateRefreshTimer = window.setTimeout(function () {
 				stateRefreshTimer = null;
 				var state = document.getElementById('billing_state');
+				var hasDisabledStateOptions = false;
 
-				if (window.jQuery && document.getElementById('billing_country') && state && state.disabled) {
+				if (window.jQuery && state) {
+					hasDisabledStateOptions = window.jQuery(state).find('option[value!=""]:disabled').length > 0;
+				}
+
+				if (window.jQuery && document.getElementById('billing_country') && state && (state.disabled || hasDisabledStateOptions)) {
 					window.jQuery('#billing_country').trigger('change');
 					window.setTimeout(restoreBillingStateControl, 50);
 					return;
