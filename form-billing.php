@@ -51,13 +51,12 @@ require_once __DIR__ . '/fhs-address-defaults.php';
 
 <?php
 $fhs_billing_defaults = fhs_get_billing_defaults_for_js();
-
-if ( ! empty( $fhs_billing_defaults ) ) :
-	?>
-	<script>
+?>
+<script>
 	(function () {
 		var billingDefaults = <?php echo wp_json_encode( $fhs_billing_defaults ); ?>;
 		var restoreTimer = null;
+		var stateRefreshTimer = null;
 
 		function setBillingField(fieldId, value) {
 			var field = document.getElementById(fieldId);
@@ -76,6 +75,68 @@ if ( ! empty( $fhs_billing_defaults ) ) :
 			} else if (field.value !== value) {
 				field.value = value;
 			}
+		}
+
+		function getFieldValue(fieldId) {
+			var field = document.getElementById(fieldId);
+			if (!field) {
+				return '';
+			}
+
+			return window.jQuery ? window.jQuery(field).val() || '' : field.value || '';
+		}
+
+		function restoreBillingStateControl() {
+			var country = document.getElementById('billing_country');
+			var state = document.getElementById('billing_state');
+
+			if (!country || !state || !getFieldValue('billing_country')) {
+				return;
+			}
+
+			var stateValue = getFieldValue('billing_state') || billingDefaults.billing_state || '';
+
+			if (window.jQuery) {
+				var $state = window.jQuery(state);
+
+				if ($state.is('select') && $state.find('option').length > 1) {
+					$state.prop('disabled', false);
+				} else if (!$state.is('select')) {
+					$state.prop('disabled', false);
+				}
+
+				if (stateValue) {
+					$state.val(stateValue);
+				}
+
+				if ($state.hasClass('select2-hidden-accessible')) {
+					$state.trigger('change.select2');
+				}
+			} else {
+				state.disabled = false;
+				if (stateValue) {
+					state.value = stateValue;
+				}
+			}
+		}
+
+		function refreshBillingStateControl() {
+			if (stateRefreshTimer) {
+				window.clearTimeout(stateRefreshTimer);
+			}
+
+			stateRefreshTimer = window.setTimeout(function () {
+				stateRefreshTimer = null;
+				var state = document.getElementById('billing_state');
+
+				if (window.jQuery && document.getElementById('billing_country') && state && state.disabled) {
+					window.jQuery('#billing_country').trigger('change');
+					window.setTimeout(restoreBillingStateControl, 50);
+					return;
+				}
+
+				restoreBillingStateControl();
+			}, 50);
 		}
 
 		function restoreBillingIfCopiedFromShipping() {
@@ -120,6 +181,7 @@ if ( ! empty( $fhs_billing_defaults ) ) :
 
 		document.addEventListener('DOMContentLoaded', function () {
 			restoreBillingIfCopiedFromShipping();
+			refreshBillingStateControl();
 			scheduleRestore();
 			window.setTimeout(restoreBillingIfCopiedFromShipping, 0);
 			window.setTimeout(scheduleRestore, 200);
@@ -129,9 +191,8 @@ if ( ! empty( $fhs_billing_defaults ) ) :
 		if (window.jQuery) {
 			window.jQuery(document.body).on('updated_checkout.fhsBillingRestore', scheduleRestore);
 			window.jQuery(document.body).on('country_to_state_changed.fhsBillingRestore', scheduleRestore);
+			window.jQuery(document.body).on('checkout_error.fhsBillingState updated_checkout.fhsBillingState', refreshBillingStateControl);
+			window.jQuery(document.body).on('country_to_state_changed.fhsBillingState', restoreBillingStateControl);
 		}
 	})();
-	</script>
-	<?php
-endif;
-?>
+</script>
