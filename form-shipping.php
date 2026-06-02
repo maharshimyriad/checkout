@@ -236,22 +236,14 @@ if (is_user_logged_in()) {
 <script>
 	document.addEventListener('DOMContentLoaded', function () {
 		const STORAGE_KEY = 'checkout_state';
-		const billingStateElement = document.getElementById('billing_state');
-
-		if (billingStateElement) {
-
-			// Store initial prefilled value from user profile
-			localStorage.setItem(
-				STORAGE_KEY,
-				billingStateElement.value || ''
-			);
-
-			// Update when user changes state
-			jQuery(billingStateElement).on('select2:select change', function (e) {
-				const value = e.target.value || '';
-				localStorage.setItem(STORAGE_KEY, value);
-			});
-		}
+		const SHIPPING_SYNC_PAIRS = [
+			['billing_first_name', 'shipping_first_name'],
+			['billing_last_name', 'shipping_last_name'],
+			['billing_address_1', 'shipping_address_1'],
+			['billing_city', 'shipping_city'],
+			['billing_postcode', 'shipping_postcode']
+		];
+		const SHIPPING_ADDRESS_FIELDS = ['first_name', 'last_name', 'address_1', 'city', 'postcode', 'country', 'state'];
 
 		const root = document.querySelector('.fhs-checkout-flow');
 		if (!root) return;
@@ -269,15 +261,125 @@ if (is_user_logged_in()) {
 			'billing_country',
 			'billing_address_1',
 			'billing_city',
-			// 		'billing_state',
+			'billing_state',
 			'billing_postcode'
 		];
 		const billingUserState = {};
 		let syncGuardTimer = null;
+		let countrySyncTimer = null;
 
 		const savedData = <?php echo wp_json_encode($user_shipping_addresses); ?>;
 		const defaultShippingKey = <?php echo wp_json_encode($default_shipping_key); ?>;
 		let selectedSavedShippingKey = defaultShippingKey || '';
+
+		const getCheckoutFieldValue = function (fieldId) {
+			const el = document.getElementById(fieldId);
+			if (!el) return '';
+			if (window.jQuery) {
+				return window.jQuery(el).val() || '';
+			}
+			return el.value || '';
+		};
+
+		const setCheckoutFieldValue = function (fieldId, value, silent) {
+			const el = document.getElementById(fieldId);
+			if (!el) return;
+			const val = value != null ? String(value) : '';
+			if (window.jQuery) {
+				const $el = window.jQuery(el);
+				if ($el.val() !== val) {
+					$el.val(val);
+				}
+				if (!silent) {
+					$el.trigger('change');
+				}
+			} else {
+				el.value = val;
+				if (!silent) {
+					el.dispatchEvent(new Event('change', { bubbles: true }));
+				}
+			}
+		};
+
+		const syncBillingStateToStorage = function () {
+			localStorage.setItem(STORAGE_KEY, getCheckoutFieldValue('billing_state'));
+		};
+
+		const isSameAsBillingActive = function () {
+			return !!(sameAsBilling && sameAsBilling.checked);
+		};
+
+		const bindBillingStateStorage = function () {
+			const billingStateElement = document.getElementById('billing_state');
+			if (!billingStateElement) return;
+
+			syncBillingStateToStorage();
+
+			if (!window.jQuery) return;
+
+			const $el = window.jQuery(billingStateElement);
+			$el.off('select2:select.fhsBillingState change.fhsBillingState');
+			$el.on('select2:select.fhsBillingState change.fhsBillingState', function (e) {
+				const value = e.target.value || '';
+				localStorage.setItem(STORAGE_KEY, value);
+				if (isSameAsBillingActive()) {
+					setCheckoutFieldValue('shipping_state', value, true);
+				}
+			});
+		};
+
+		const setShippingCountryThenState = function (country, state, silent, done) {
+			const finish = function () {
+				setCheckoutFieldValue('shipping_state', state, silent);
+				if (typeof done === 'function') {
+					done();
+				}
+			};
+
+			// After updated_checkout, set values directly — triggering country change causes AJAX loops.
+			if (silent) {
+				setCheckoutFieldValue('shipping_country', country, true);
+				finish();
+				return;
+			}
+
+			if (!window.jQuery) {
+				setCheckoutFieldValue('shipping_country', country, false);
+				finish();
+				return;
+			}
+
+			const $body = window.jQuery(document.body);
+			const $shippingCountry = window.jQuery('#shipping_country');
+			const currentCountry = getCheckoutFieldValue('shipping_country');
+
+			if (currentCountry === country) {
+				finish();
+				return;
+			}
+
+			if (countrySyncTimer) {
+				window.clearTimeout(countrySyncTimer);
+			}
+
+			const onCountryChanged = function () {
+				$body.off('country_to_state_changed.fhsShippingSync', onCountryChanged);
+				if (countrySyncTimer) {
+					window.clearTimeout(countrySyncTimer);
+					countrySyncTimer = null;
+				}
+				window.setTimeout(finish, 50);
+			};
+
+			$body.on('country_to_state_changed.fhsShippingSync', onCountryChanged);
+			countrySyncTimer = window.setTimeout(function () {
+				$body.off('country_to_state_changed.fhsShippingSync', onCountryChanged);
+				countrySyncTimer = null;
+				finish();
+			}, 600);
+
+			$shippingCountry.val(country).trigger('change');
+		};
 
 		const getSavedAddressFieldValue = function (address, field) {
 			if (!address) return '';
@@ -316,19 +418,21 @@ if (is_user_logged_in()) {
 				hiddenShippingKey.value = key;
 			}
 
-			['first_name', 'last_name', 'address_1', 'city', 'postcode', 'country', 'state'].forEach(function (field) {
-				const input = document.getElementById('shipping_' + field);
-				const value = getSavedAddressFieldValue(selected, field);
-				if (!input) return;
-				input.value = value;
-				if (!silent) {
-					input.dispatchEvent(new Event('change', { bubbles: true }));
+			const country = getSavedAddressFieldValue(selected, 'country');
+			const state = getSavedAddressFieldValue(selected, 'state');
+
+			SHIPPING_ADDRESS_FIELDS.forEach(function (field) {
+				if (field === 'country' || field === 'state') {
+					return;
 				}
+				setCheckoutFieldValue('shipping_' + field, getSavedAddressFieldValue(selected, field), silent);
 			});
 
-			if (queueUpdate && window.jQuery) {
-				queueCheckoutUpdate();
-			}
+			setShippingCountryThenState(country, state, silent, function () {
+				if (queueUpdate) {
+					queueCheckoutUpdate();
+				}
+			});
 		};
 
 		const getSelectedShippingMethodInput = function (mode) {
@@ -433,57 +537,30 @@ if (is_user_logged_in()) {
 		};
 
 
-		const syncShippingStateWithBilling = function (options) {
-			if (!sameAsBilling || !sameAsBilling.checked) {
+		const syncShippingWithBilling = function (options) {
+			if (!isSameAsBillingActive()) {
 				return;
 			}
 
 			const opts = options || {};
 			const silent = opts.silent === true;
-
-			const shippingState = document.getElementById('shipping_state');
-
-			if (!shippingState) return;
-
-			const storedValue = localStorage.getItem(STORAGE_KEY) || '';
-
-			if (shippingState.value !== storedValue) {
-				shippingState.value = storedValue;
-
-				if (!silent) {
-					shippingState.dispatchEvent(new Event('change', { bubbles: true }));
-				}
-			}
-		};
-
-		const syncShippingWithBilling = function (options) {
-			const opts = options || {};
 			const queueUpdate = opts.queueUpdate !== false;
-			const pairs = [
-				['billing_first_name', 'shipping_first_name'],
-				['billing_last_name', 'shipping_last_name'],
-				['billing_country', 'shipping_country'],
-				['billing_address_1', 'shipping_address_1'],
-				['billing_city', 'shipping_city'],
-				// 			['billing_state', 'shipping_state'],
-				['billing_postcode', 'shipping_postcode']
-			];
 
-			pairs.forEach(function (pair) {
-				const billing = document.getElementById(pair[0]);
-				const shipping = document.getElementById(pair[1]);
-				if (!billing || !shipping) return;
-
-				shipping.value = billing.value || '';
+			SHIPPING_SYNC_PAIRS.forEach(function (pair) {
+				setCheckoutFieldValue(pair[1], getCheckoutFieldValue(pair[0]), silent);
 			});
 
-			syncShippingStateWithBilling();
+			const billingCountry = getCheckoutFieldValue('billing_country');
+			const billingState = getCheckoutFieldValue('billing_state');
+			syncBillingStateToStorage();
 
-			if (queueUpdate) {
-				queueCheckoutUpdate();
-			}
-			enforceBillingState();
-			ensureBillingAddressEditable();
+			setShippingCountryThenState(billingCountry, billingState, silent, function () {
+				if (queueUpdate) {
+					queueCheckoutUpdate();
+				}
+				enforceBillingState();
+				ensureBillingAddressEditable();
+			});
 		};
 
 		const normalizeCountryLabels = function () {
@@ -539,6 +616,10 @@ if (is_user_logged_in()) {
 					if (savedShipping) {
 						savedShipping.value = '';
 					}
+					const hiddenShippingKey = document.getElementById('thmaf_hidden_field_shipping');
+					if (hiddenShippingKey) {
+						hiddenShippingKey.value = '';
+					}
 					syncShippingWithBilling();
 				}
 				ensureBillingAddressEditable();
@@ -549,29 +630,37 @@ if (is_user_logged_in()) {
 			if (!event.target) return;
 			const targetId = String(event.target.id || '');
 			if (targetId.startsWith('billing_')) {
-				billingUserState[targetId] = event.target.value || '';
+				billingUserState[targetId] = getCheckoutFieldValue(targetId);
 			}
-			if (!sameAsBilling || !sameAsBilling.checked) return;
-			if (!targetId.startsWith('billing_')) return;
-			// Avoid per-keystroke checkout AJAX; sync values only.
-			syncShippingWithBilling({ queueUpdate: false });
-			ensureBillingAddressEditable();
+			if (targetId === 'billing_state') {
+				syncBillingStateToStorage();
+			}
+			if (!isSameAsBillingActive()) return;
+			if (targetId.startsWith('billing_')) {
+				// Avoid per-keystroke checkout AJAX; sync values only.
+				syncShippingWithBilling({ queueUpdate: false, silent: true });
+				ensureBillingAddressEditable();
+			}
 		});
 
 		document.addEventListener('change', function (event) {
 			if (!event.target) return;
 			const targetId = String(event.target.id || '');
 			if (targetId.startsWith('billing_')) {
-				billingUserState[targetId] = event.target.value || '';
+				billingUserState[targetId] = getCheckoutFieldValue(targetId);
 			}
-			if (!sameAsBilling || !sameAsBilling.checked) return;
+			if (targetId === 'billing_state') {
+				syncBillingStateToStorage();
+			}
+			if (!isSameAsBillingActive()) return;
 			if (targetId.startsWith('billing_')) {
-				syncShippingWithBilling();
-				ensureBillingAddressEditable();
+				syncShippingWithBilling({ queueUpdate: targetId === 'billing_country' || targetId === 'billing_state' });
 				return;
 			}
 			if (targetId.startsWith('shipping_')) {
+				// Keep shipping aligned with billing when "same as billing" is enabled.
 				window.setTimeout(function () {
+					syncShippingWithBilling({ queueUpdate: false, silent: true });
 					enforceBillingState();
 					ensureBillingAddressEditable();
 				}, 0);
@@ -583,19 +672,22 @@ if (is_user_logged_in()) {
 		}
 
 		normalizeCountryLabels();
+		bindBillingStateStorage();
 		captureBillingState();
 
 		if (window.jQuery) {
 			window.jQuery(document.body).on('updated_checkout', function () {
 				normalizeCountryLabels();
+				bindBillingStateStorage();
 				// Silent sync only — firing change here causes infinite update_order_review loops.
 				setShippingMethodForMode(modeInput ? modeInput.value : '', true);
-				if (sameAsBilling && sameAsBilling.checked) {
-					syncShippingStateWithBilling({ silent: true });
+				if (isSameAsBillingActive()) {
+					syncShippingWithBilling({ queueUpdate: false, silent: true });
 				} else if (selectedSavedShippingKey && savedData[selectedSavedShippingKey]) {
 					// Checkout AJAX replaces field markup with WC customer (often billing) values.
 					applySavedAddress(selectedSavedShippingKey, { silent: true });
 				}
+				captureBillingState();
 				ensureBillingAddressEditable();
 			});
 		}
@@ -603,11 +695,8 @@ if (is_user_logged_in()) {
 		setMode(modeInput && modeInput.value ? modeInput.value : '');
 		captureBillingState();
 
-		if (defaultShippingKey && savedData[defaultShippingKey]) {
-			if (savedShipping) {
-				savedShipping.value = defaultShippingKey;
-			}
-			applySavedAddress(defaultShippingKey, { silent: true });
+		if (defaultShippingKey && savedData[defaultShippingKey] && savedShipping) {
+			savedShipping.value = defaultShippingKey;
 		}
 
 		ensureBillingAddressEditable();
