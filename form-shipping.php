@@ -48,6 +48,13 @@ if ( ! in_array( $fulfilment_mode, array( 'delivery', 'pickup' ), true ) ) {
 
 				<h3><?php esc_html_e( 'Shipping details', 'woocommerce' ); ?></h3>
 
+				<label class="woocommerce-form__label woocommerce-form__label-for-checkbox checkbox same-as-billing-toggle">
+					<input id="fhs-use-same-as-billing-address-checkbox"
+						class="woocommerce-form__input woocommerce-form__input-checkbox input-checkbox" type="checkbox"
+						name="fhs_use_same_as_billing_address" value="1" />
+					<span><?php esc_html_e( 'Use same as billing address', 'woocommerce' ); ?></span>
+				</label>
+
 				<div class="shipping-options-row">
 					<div class="residential-delivery-group">
 						<span class="residential-delivery-label"><?php esc_html_e( 'Is this a Residential delivery?', 'woocommerce' ); ?></span>
@@ -139,6 +146,137 @@ document.addEventListener('DOMContentLoaded', function () {
 	var modeInput = document.getElementById('fhs_fulfilment_method');
 	var deliveryPanel = document.getElementById('fhs-delivery-panel');
 	var pickupPanel = document.getElementById('fhs-pickup-panel');
+	var sameAsBilling = document.getElementById('fhs-use-same-as-billing-address-checkbox');
+	var checkoutUpdateTimer = null;
+	var countrySyncTimer = null;
+
+	var billingShippingPairs = [
+		['billing_first_name', 'shipping_first_name'],
+		['billing_last_name', 'shipping_last_name'],
+		['billing_address_1', 'shipping_address_1'],
+		['billing_city', 'shipping_city'],
+		['billing_postcode', 'shipping_postcode']
+	];
+
+	window.fhsSyncingShippingFromBilling = false;
+
+	function isSameAsBillingActive() {
+		return !!(sameAsBilling && sameAsBilling.checked);
+	}
+
+	function getFieldValue(fieldId) {
+		var el = document.getElementById(fieldId);
+		if (!el) return '';
+		return window.jQuery ? window.jQuery(el).val() || '' : el.value || '';
+	}
+
+	function setFieldValue(fieldId, value, triggerChange) {
+		var el = document.getElementById(fieldId);
+		if (!el) return;
+		var val = value != null ? String(value) : '';
+		if (window.jQuery) {
+			var $el = window.jQuery(el);
+			if ($el.val() !== val) {
+				$el.val(val);
+			}
+			if (triggerChange) {
+				$el.trigger('change');
+			}
+		} else if (el.value !== val) {
+			el.value = val;
+			if (triggerChange) {
+				el.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+		}
+	}
+
+	function setShippingCountryThenState(country, state, done) {
+		var finish = function () {
+			if (state) {
+				setFieldValue('shipping_state', state, true);
+			}
+			if (typeof done === 'function') {
+				done();
+			}
+		};
+
+		if (!country) {
+			finish();
+			return;
+		}
+
+		if (!window.jQuery) {
+			setFieldValue('shipping_country', country, true);
+			finish();
+			return;
+		}
+
+		var $body = window.jQuery(document.body);
+		var $shippingCountry = window.jQuery('#shipping_country');
+
+		if (getFieldValue('shipping_country') === country) {
+			finish();
+			return;
+		}
+
+		if (countrySyncTimer) {
+			window.clearTimeout(countrySyncTimer);
+		}
+
+		var onCountryChanged = function () {
+			$body.off('country_to_state_changed.fhsSameAsBilling', onCountryChanged);
+			if (countrySyncTimer) {
+				window.clearTimeout(countrySyncTimer);
+				countrySyncTimer = null;
+			}
+			window.setTimeout(finish, 50);
+		};
+
+		$body.on('country_to_state_changed.fhsSameAsBilling', onCountryChanged);
+		countrySyncTimer = window.setTimeout(function () {
+			$body.off('country_to_state_changed.fhsSameAsBilling', onCountryChanged);
+			countrySyncTimer = null;
+			finish();
+		}, 600);
+
+		$shippingCountry.val(country).trigger('change');
+	}
+
+	function queueCheckoutUpdate() {
+		if (!window.jQuery) return;
+		if (checkoutUpdateTimer) {
+			window.clearTimeout(checkoutUpdateTimer);
+		}
+		checkoutUpdateTimer = window.setTimeout(function () {
+			window.jQuery(document.body).trigger('update_checkout');
+		}, 150);
+	}
+
+	function syncShippingFromBilling(options) {
+		if (!isSameAsBillingActive()) {
+			return;
+		}
+
+		var opts = options || {};
+		var triggerCheckout = opts.triggerCheckout === true;
+
+		window.fhsSyncingShippingFromBilling = true;
+
+		billingShippingPairs.forEach(function (pair) {
+			setFieldValue(pair[1], getFieldValue(pair[0]), false);
+		});
+
+		setShippingCountryThenState(
+			getFieldValue('billing_country'),
+			getFieldValue('billing_state'),
+			function () {
+				window.fhsSyncingShippingFromBilling = false;
+				if (triggerCheckout) {
+					queueCheckoutUpdate();
+				}
+			}
+		);
+	}
 
 	function setMode(mode) {
 		var active = mode === 'pickup' ? 'pickup' : 'delivery';
@@ -158,6 +296,38 @@ document.addEventListener('DOMContentLoaded', function () {
 			if (window.jQuery) window.jQuery(document.body).trigger('update_checkout');
 		});
 	});
+
+	if (sameAsBilling) {
+		sameAsBilling.addEventListener('change', function () {
+			if (this.checked) {
+				syncShippingFromBilling({ triggerCheckout: true });
+			}
+		});
+	}
+
+	document.addEventListener('input', function (event) {
+		if (!event.target || !isSameAsBillingActive()) return;
+		var id = String(event.target.id || '');
+		if (id.indexOf('billing_') !== 0) return;
+		syncShippingFromBilling({ triggerCheckout: false });
+	});
+
+	document.addEventListener('change', function (event) {
+		if (!event.target || !isSameAsBillingActive()) return;
+		var id = String(event.target.id || '');
+		if (id.indexOf('billing_') !== 0) return;
+		syncShippingFromBilling({
+			triggerCheckout: id === 'billing_country' || id === 'billing_state'
+		});
+	});
+
+	if (window.jQuery) {
+		window.jQuery(document.body).on('updated_checkout.fhsSameAsBilling', function () {
+			if (isSameAsBillingActive()) {
+				syncShippingFromBilling({ triggerCheckout: false });
+			}
+		});
+	}
 
 	setMode(modeInput ? modeInput.value : 'delivery');
 });

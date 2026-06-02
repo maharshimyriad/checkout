@@ -79,6 +79,14 @@ if ( ! empty( $fhs_billing_defaults ) ) :
 		}
 
 		function restoreBillingIfCopiedFromShipping() {
+			if (window.fhsSyncingShippingFromBilling) {
+				return;
+			}
+			var sameAsCb = document.getElementById('fhs-use-same-as-billing-address-checkbox');
+			if (sameAsCb && sameAsCb.checked) {
+				return;
+			}
+
 			Object.keys(billingDefaults).forEach(function (billingId) {
 				var expected = billingDefaults[billingId];
 				var shippingId = billingId.replace(/^billing_/, 'shipping_');
