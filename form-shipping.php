@@ -79,10 +79,10 @@ if ( ! in_array( $fulfilment_mode, array( 'delivery', 'pickup' ), true ) ) {
 						'shipping_first_name' => 10,
 						'shipping_last_name'  => 20,
 						'shipping_address_1'  => 30,
-						'shipping_country'    => 40,
-						'shipping_state'      => 45,
-						'shipping_city'       => 50,
-						'shipping_postcode'   => 65,
+						'shipping_city'       => 40,
+						'shipping_state'      => 50,
+						'shipping_postcode'   => 60,
+						'shipping_country'    => 70,
 					);
 
 					foreach ( $fields as $key => $field ) {

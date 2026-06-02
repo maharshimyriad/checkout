@@ -26,14 +26,14 @@ require_once __DIR__ . '/fhs-address-defaults.php';
 		$billing_field_order = array(
 			'billing_first_name' => 10,
 			'billing_last_name'  => 20,
-			'billing_company'    => 30,
-			'billing_address_1'  => 40,
-			'billing_country'    => 50,
-			'billing_state'      => 55,
-			'billing_city'       => 60,
-			'billing_postcode'   => 65,
-			'billing_phone'      => 70,
-			'billing_email'      => 80,
+			'billing_phone'      => 30,
+			'billing_email'      => 40,
+			'billing_company'    => 50,
+			'billing_address_1'  => 60,
+			'billing_city'       => 70,
+			'billing_state'      => 80,
+			'billing_postcode'   => 90,
+			'billing_country'    => 100,
 		);
 
 		foreach ( $fields as $key => $field ) {
