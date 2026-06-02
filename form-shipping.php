@@ -47,6 +47,28 @@ if ( ! in_array( $fulfilment_mode, array( 'delivery', 'pickup' ), true ) ) {
 				<?php do_action( 'woocommerce_before_checkout_shipping_form', $checkout ); ?>
 
 				<h3><?php esc_html_e( 'Shipping details', 'woocommerce' ); ?></h3>
+								<?php if (!empty($user_shipping_addresses)): ?>
+					<p class="form-row form-row-wide" id="thwma_saved_shipping_field">
+						<label for="thwma_saved_shipping"><?php esc_html_e('Address Book', 'woocommerce'); ?></label>
+						<span class="woocommerce-input-wrapper">
+							<select id="thwma_saved_shipping" class="select" style="width:100%;">
+								<option value=""><?php esc_html_e('Select an address', 'woocommerce'); ?></option>
+								<option value="same_as_billing"><?php esc_html_e('Same as billing address', 'woocommerce'); ?>
+								</option>
+								<?php foreach ($user_shipping_addresses as $key => $address): ?>
+									<?php
+									$label = !empty($address['shipping_heading'])
+										? $address['shipping_heading']
+										: ucfirst(str_replace('_', ' ', (string) $key));
+									?>
+									<option value="<?php echo esc_attr($key); ?>">
+										<?php echo esc_html($label); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</span>
+					</p>
+				<?php endif; ?>
 
 				<label class="woocommerce-form__label woocommerce-form__label-for-checkbox checkbox same-as-billing-toggle">
 					<input id="fhs-use-same-as-billing-address-checkbox"
