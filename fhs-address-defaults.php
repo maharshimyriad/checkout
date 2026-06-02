@@ -335,6 +335,37 @@ if ( ! function_exists( 'fhs_checkout_get_default_address_value' ) ) {
 	}
 }
 
+if ( ! function_exists( 'fhs_get_billing_defaults_for_js' ) ) {
+	/**
+	 * Normalized billing defaults for client-side restore (after AJAX / country_to_state).
+	 *
+	 * @return array<string, string>
+	 */
+	function fhs_get_billing_defaults_for_js() {
+		$entry = fhs_get_resolved_default_entry( 'billing' );
+
+		if ( ! $entry ) {
+			return array();
+		}
+
+		$defaults = array();
+
+		foreach ( $entry as $field_key => $field_value ) {
+			if ( ! is_string( $field_key ) || 0 !== strpos( $field_key, 'billing_' ) ) {
+				continue;
+			}
+
+			$defaults[ $field_key ] = fhs_normalize_checkout_field(
+				$field_key,
+				(string) $field_value,
+				$entry
+			);
+		}
+
+		return $defaults;
+	}
+}
+
 if ( ! function_exists( 'fhs_guard_billing_from_shipping_value' ) ) {
 	/**
 	 * Last line of defence: billing fields must not display shipping session values.
