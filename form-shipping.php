@@ -10,6 +10,7 @@ defined('ABSPATH') || exit;
 require_once __DIR__ . '/fhs-address-defaults.php';
 
 $user_shipping_addresses = [];
+$user_shipping_addresses_for_js = [];
 
 $fulfilment_mode = '';
 
@@ -33,6 +34,27 @@ if (is_user_logged_in()) {
 	if (!empty($data['shipping']) && is_array($data['shipping'])) {
 		$user_shipping_addresses = $data['shipping'];
 	}
+}
+
+foreach ($user_shipping_addresses as $key => $address) {
+	if (!is_array($address)) {
+		continue;
+	}
+
+	$normalized = [];
+
+	foreach (array('first_name', 'last_name', 'address_1', 'city', 'state', 'postcode', 'country') as $part) {
+		$field_key = 'shipping_' . $part;
+		$value = fhs_get_saved_address_field($address, $field_key);
+
+		if ('' === $value) {
+			continue;
+		}
+
+		$normalized[$field_key] = fhs_normalize_checkout_field($field_key, $value, $address);
+	}
+
+	$user_shipping_addresses_for_js[(string) $key] = $normalized;
 }
 ?>
 
@@ -66,7 +88,7 @@ if (is_user_logged_in()) {
 					<p class="form-row form-row-wide" id="thwma_saved_shipping_field">
 						<label for="thwma_saved_shipping"><?php esc_html_e('Address Book', 'woocommerce'); ?></label>
 						<span class="woocommerce-input-wrapper">
-							<select id="thwma_saved_shipping" class="select" style="width:100%;">
+							<select id="thwma_saved_shipping" name="thwma_saved_shipping" class="select" style="width:100%;">
 								<option value=""><?php esc_html_e('Select an address', 'woocommerce'); ?></option>
 								<option value="same_as_billing"><?php esc_html_e('Same as billing address', 'woocommerce'); ?>
 								</option>
@@ -187,6 +209,7 @@ if (is_user_logged_in()) {
 		var deliveryPanel = document.getElementById('fhs-delivery-panel');
 		var pickupPanel = document.getElementById('fhs-pickup-panel');
 		var sameAsBilling = document.getElementById('fhs-use-same-as-billing-address-checkbox');
+		var savedShippingSelect = document.getElementById('thwma_saved_shipping');
 		var checkoutUpdateTimer = null;
 
 		var billingShippingPairs = [
@@ -201,7 +224,7 @@ if (is_user_logged_in()) {
 
 		window.fhsSyncingShippingFromBilling = false;
 		window.fhsBlockCheckoutUpdate = false;
-		const savedData = <?php echo wp_json_encode($user_shipping_addresses); ?>;
+		var savedShippingAddresses = <?php echo wp_json_encode($user_shipping_addresses_for_js); ?> || {};
 
 		function isSameAsBillingActive() {
 			return !!(sameAsBilling && sameAsBilling.checked);
@@ -308,6 +331,53 @@ if (is_user_logged_in()) {
 			}
 		}
 
+		function applySavedShippingAddress(addressKey) {
+			if (!addressKey) {
+				return;
+			}
+
+			if (addressKey === 'same_as_billing') {
+				if (sameAsBilling) {
+					sameAsBilling.checked = true;
+				}
+				syncShippingFromBilling({ triggerCheckout: true });
+				return;
+			}
+
+			var address = savedShippingAddresses[addressKey];
+			if (!address) {
+				return;
+			}
+
+			if (sameAsBilling) {
+				sameAsBilling.checked = false;
+			}
+
+			window.fhsSyncingShippingFromBilling = false;
+			window.fhsBlockCheckoutUpdate = true;
+
+			Object.keys(address).forEach(function (fieldId) {
+				if (fieldId !== 'shipping_country' && fieldId !== 'shipping_state') {
+					setFieldValue(fieldId, address[fieldId], false);
+				}
+			});
+
+			if (Object.prototype.hasOwnProperty.call(address, 'shipping_country')) {
+				setFieldValue('shipping_country', address.shipping_country, true);
+			}
+
+			window.setTimeout(function () {
+				if (Object.prototype.hasOwnProperty.call(address, 'shipping_state')) {
+					setFieldValue('shipping_state', address.shipping_state, false);
+				}
+				refreshSelect2Display('shipping_country');
+				refreshSelect2Display('shipping_state');
+
+				window.fhsBlockCheckoutUpdate = false;
+				queueCheckoutUpdate();
+			}, 0);
+		}
+
 		function setMode(mode) {
 			var active = mode === 'pickup' ? 'pickup' : 'delivery';
 			if (modeInput) modeInput.value = active;
@@ -326,6 +396,12 @@ if (is_user_logged_in()) {
 				if (window.jQuery) window.jQuery(document.body).trigger('update_checkout');
 			});
 		});
+
+		if (savedShippingSelect) {
+			savedShippingSelect.addEventListener('change', function () {
+				applySavedShippingAddress(this.value);
+			});
+		}
 
 		if (sameAsBilling) {
 			sameAsBilling.addEventListener('change', function () {
