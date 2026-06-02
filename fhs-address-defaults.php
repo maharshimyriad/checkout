@@ -434,7 +434,3 @@ if ( ! function_exists( 'fhs_register_checkout_address_defaults' ) ) {
 }
 
 fhs_register_checkout_address_defaults();
-
-if ( file_exists( __DIR__ . '/fhs-address-debug.php' ) ) {
-	require_once __DIR__ . '/fhs-address-debug.php';
-}
