@@ -67,26 +67,30 @@ if ( ! function_exists( 'fhs_address_debug_collect_snapshot' ) ) {
 		);
 
 		foreach ( array( 'billing', 'shipping' ) as $type ) {
-			$entry = fhs_get_default_address_entry( $type );
-			$key   = $book[ 'default_' . $type ];
+			$book_entry    = fhs_get_default_address_entry( $type );
+			$resolved      = fhs_get_resolved_default_entry( $type );
+			$key           = $book[ 'default_' . $type ];
 
 			$snapshot['default_entries'][ $type ] = array(
-				'address_key' => $key,
-				'entry_keys'  => array_keys( $entry ),
-				'entry'       => $entry,
+				'address_key'      => $key,
+				'source'           => $book_entry ? 'address_book' : ( $resolved ? 'wc_user_meta' : 'none' ),
+				'entry_keys'       => array_keys( $resolved ),
+				'entry'            => $resolved,
 			);
 		}
 
 		foreach ( $state_fields as $field_key ) {
 			$type  = 0 === strpos( $field_key, 'billing_' ) ? 'billing' : 'shipping';
-			$entry = fhs_get_default_address_entry( $type );
+			$entry = fhs_get_resolved_default_entry( $type );
+			$raw   = fhs_get_saved_address_field( $entry, $field_key );
 
 			$snapshot['state_resolution'][ $field_key ] = array(
 				'entry_prefixed'  => isset( $entry[ $field_key ] ) ? (string) $entry[ $field_key ] : null,
 				'entry_short'     => isset( $entry[ preg_replace( '/^(billing|shipping)_/', '', $field_key ) ] )
 					? (string) $entry[ preg_replace( '/^(billing|shipping)_/', '', $field_key ) ]
 					: null,
-				'fhs_get_saved'   => fhs_get_saved_address_field( $entry, $field_key ),
+				'fhs_get_saved'   => $raw,
+				'normalized'      => $entry ? fhs_normalize_checkout_field( $field_key, $raw, $entry ) : $raw,
 				'has_posted'      => fhs_checkout_field_has_posted_value( $field_key ),
 			);
 		}

@@ -78,6 +78,143 @@ if ( ! function_exists( 'fhs_get_default_address_entry' ) ) {
 	}
 }
 
+if ( ! function_exists( 'fhs_get_profile_address_entry' ) ) {
+	/**
+	 * WooCommerce user-meta address when ThemeHigh has no saved billing rows.
+	 *
+	 * @param string $type billing|shipping
+	 * @return array<string, string>
+	 */
+	function fhs_get_profile_address_entry( $type ) {
+		if ( ! is_user_logged_in() ) {
+			return array();
+		}
+
+		$user_id = get_current_user_id();
+		$parts   = array( 'first_name', 'last_name', 'company', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country' );
+		$entry   = array();
+
+		foreach ( $parts as $part ) {
+			$key           = $type . '_' . $part;
+			$entry[ $key ] = (string) get_user_meta( $user_id, $key, true );
+		}
+
+		return array_filter( $entry, static function ( $value ) {
+			return '' !== (string) $value;
+		} );
+	}
+}
+
+if ( ! function_exists( 'fhs_get_resolved_default_entry' ) ) {
+	/**
+	 * Address book default, or WooCommerce profile meta for billing.
+	 *
+	 * @param string $type billing|shipping
+	 * @return array<string, string>
+	 */
+	function fhs_get_resolved_default_entry( $type ) {
+		$entry = fhs_get_default_address_entry( $type );
+
+		if ( $entry ) {
+			return $entry;
+		}
+
+		if ( 'billing' === $type ) {
+			return fhs_get_profile_address_entry( 'billing' );
+		}
+
+		return array();
+	}
+}
+
+if ( ! function_exists( 'fhs_normalize_checkout_country' ) ) {
+	function fhs_normalize_checkout_country( $country ) {
+		$country = trim( (string) $country );
+
+		if ( '' === $country ) {
+			return '';
+		}
+
+		if ( 2 === strlen( $country ) ) {
+			return strtoupper( $country );
+		}
+
+		if ( in_array( strtolower( $country ), array( 'australia', 'aus' ), true ) ) {
+			return 'AU';
+		}
+
+		if ( function_exists( 'WC' ) && WC()->countries ) {
+			foreach ( WC()->countries->get_countries() as $code => $name ) {
+				if ( strcasecmp( (string) $name, $country ) === 0 ) {
+					return (string) $code;
+				}
+			}
+		}
+
+		return $country;
+	}
+}
+
+if ( ! function_exists( 'fhs_normalize_checkout_state' ) ) {
+	function fhs_normalize_checkout_state( $state, $country_code ) {
+		$state        = trim( (string) $state );
+		$country_code = fhs_normalize_checkout_country( $country_code );
+
+		if ( '' === $state || '' === $country_code ) {
+			return $state;
+		}
+
+		if ( ! function_exists( 'WC' ) || ! WC()->countries ) {
+			return $state;
+		}
+
+		$states = WC()->countries->get_states( $country_code );
+
+		if ( ! is_array( $states ) || ! $states ) {
+			return $state;
+		}
+
+		if ( isset( $states[ $state ] ) ) {
+			return $state;
+		}
+
+		foreach ( $states as $code => $name ) {
+			if ( strcasecmp( (string) $name, $state ) === 0 ) {
+				return (string) $code;
+			}
+		}
+
+		return $state;
+	}
+}
+
+if ( ! function_exists( 'fhs_normalize_checkout_field' ) ) {
+	/**
+	 * @param array<string, string> $entry Source address row.
+	 */
+	function fhs_normalize_checkout_field( $field_key, $value, array $entry ) {
+		$value = trim( (string) $value );
+
+		if ( '' === $value ) {
+			return '';
+		}
+
+		if ( preg_match( '/_(country)$/', $field_key ) ) {
+			return fhs_normalize_checkout_country( $value );
+		}
+
+		if ( preg_match( '/_(state)$/', $field_key ) ) {
+			$type        = 0 === strpos( $field_key, 'billing_' ) ? 'billing' : 'shipping';
+			$country_key = $type . '_country';
+			$country     = fhs_get_saved_address_field( $entry, $country_key );
+
+			return fhs_normalize_checkout_state( $value, $country );
+		}
+
+		return $value;
+	}
+}
+
 if ( ! function_exists( 'fhs_get_saved_address_field' ) ) {
 	/**
 	 * @param array<string, string> $entry Address book row.
@@ -125,7 +262,7 @@ if ( ! function_exists( 'fhs_apply_default_addresses_to_customer' ) ) {
 		}
 
 		foreach ( array( 'billing', 'shipping' ) as $type ) {
-			$entry = fhs_get_default_address_entry( $type );
+			$entry = fhs_get_resolved_default_entry( $type );
 
 			if ( ! $entry ) {
 				continue;
@@ -137,9 +274,10 @@ if ( ! function_exists( 'fhs_apply_default_addresses_to_customer' ) ) {
 				}
 
 				$setter = 'set_' . $field_key;
+				$value  = fhs_normalize_checkout_field( $field_key, (string) $field_value, $entry );
 
 				if ( is_callable( array( WC()->customer, $setter ) ) ) {
-					WC()->customer->{$setter}( wc_clean( $field_value ) );
+					WC()->customer->{$setter}( wc_clean( $value ) );
 				}
 			}
 		}
@@ -170,7 +308,7 @@ if ( ! function_exists( 'fhs_checkout_get_default_address_value' ) ) {
 			return $value;
 		}
 
-		$entry = fhs_get_default_address_entry( $type );
+		$entry = fhs_get_resolved_default_entry( $type );
 
 		if ( ! $entry ) {
 			return $value;
@@ -178,7 +316,11 @@ if ( ! function_exists( 'fhs_checkout_get_default_address_value' ) ) {
 
 		$saved = fhs_get_saved_address_field( $entry, $input );
 
-		return '' !== $saved ? $saved : $value;
+		if ( '' === $saved ) {
+			return $value;
+		}
+
+		return fhs_normalize_checkout_field( $input, $saved, $entry );
 	}
 }
 
