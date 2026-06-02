@@ -203,5 +203,11 @@ if ( ! function_exists( 'fhs_address_debug_render_panel' ) ) {
 }
 
 if ( fhs_address_debug_is_enabled() ) {
-	add_action( 'woocommerce_before_checkout_form', 'fhs_address_debug_render_panel', 1 );
+	// Footer: both billing (99) and shipping (99) hooks have already run.
+	add_action( 'wp_footer', function () {
+		if ( ! is_checkout() ) {
+			return;
+		}
+		fhs_address_debug_render_panel();
+	}, 99 );
 }

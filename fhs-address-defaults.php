@@ -251,38 +251,49 @@ if ( ! function_exists( 'fhs_checkout_field_has_posted_value' ) ) {
 	}
 }
 
-if ( ! function_exists( 'fhs_apply_default_addresses_to_customer' ) ) {
-	function fhs_apply_default_addresses_to_customer() {
-		if ( wp_doing_ajax() ) {
-			return;
-		}
-
+if ( ! function_exists( 'fhs_apply_resolved_entry_to_customer' ) ) {
+	/**
+	 * Write one address type to WC()->customer (billing and shipping stay separate).
+	 *
+	 * @param string $type billing|shipping
+	 */
+	function fhs_apply_resolved_entry_to_customer( $type ) {
 		if ( ! is_user_logged_in() || ! function_exists( 'WC' ) || ! WC()->customer ) {
 			return;
 		}
 
-		foreach ( array( 'billing', 'shipping' ) as $type ) {
-			$entry = fhs_get_resolved_default_entry( $type );
+		$entry = fhs_get_resolved_default_entry( $type );
 
-			if ( ! $entry ) {
+		if ( ! $entry ) {
+			return;
+		}
+
+		foreach ( $entry as $field_key => $field_value ) {
+			if ( ! is_string( $field_key ) || 0 !== strpos( $field_key, $type . '_' ) ) {
 				continue;
 			}
 
-			foreach ( $entry as $field_key => $field_value ) {
-				if ( ! is_string( $field_key ) || 0 !== strpos( $field_key, $type . '_' ) ) {
-					continue;
-				}
+			$setter = 'set_' . $field_key;
+			$value  = fhs_normalize_checkout_field( $field_key, (string) $field_value, $entry );
 
-				$setter = 'set_' . $field_key;
-				$value  = fhs_normalize_checkout_field( $field_key, (string) $field_value, $entry );
-
-				if ( is_callable( array( WC()->customer, $setter ) ) ) {
-					WC()->customer->{$setter}( wc_clean( $value ) );
-				}
+			if ( is_callable( array( WC()->customer, $setter ) ) ) {
+				WC()->customer->{$setter}( wc_clean( $value ) );
 			}
 		}
 
 		WC()->customer->save();
+	}
+}
+
+if ( ! function_exists( 'fhs_apply_billing_address_to_customer' ) ) {
+	function fhs_apply_billing_address_to_customer() {
+		fhs_apply_resolved_entry_to_customer( 'billing' );
+	}
+}
+
+if ( ! function_exists( 'fhs_apply_shipping_address_to_customer' ) ) {
+	function fhs_apply_shipping_address_to_customer() {
+		fhs_apply_resolved_entry_to_customer( 'shipping' );
 	}
 }
 
@@ -324,14 +335,69 @@ if ( ! function_exists( 'fhs_checkout_get_default_address_value' ) ) {
 	}
 }
 
+if ( ! function_exists( 'fhs_guard_billing_from_shipping_value' ) ) {
+	/**
+	 * Last line of defence: billing fields must not display shipping session values.
+	 */
+	function fhs_guard_billing_from_shipping_value( $value, $input ) {
+		if ( 0 !== strpos( $input, 'billing_' ) || ! is_user_logged_in() ) {
+			return $value;
+		}
+
+		if ( fhs_checkout_field_has_posted_value( $input ) ) {
+			return $value;
+		}
+
+		$billing_entry = fhs_get_resolved_default_entry( 'billing' );
+
+		if ( ! $billing_entry ) {
+			return $value;
+		}
+
+		$saved = fhs_get_saved_address_field( $billing_entry, $input );
+
+		if ( '' === $saved ) {
+			return $value;
+		}
+
+		$correct = fhs_normalize_checkout_field( $input, $saved, $billing_entry );
+
+		if ( '' === (string) $correct ) {
+			return $value;
+		}
+
+		$shipping_key    = str_replace( 'billing_', 'shipping_', $input );
+		$shipping_getter = 'get_' . $shipping_key;
+
+		if ( function_exists( 'WC' ) && WC()->customer && is_callable( array( WC()->customer, $shipping_getter ) ) ) {
+			$shipping_value = (string) WC()->customer->{$shipping_getter}();
+
+			if ( (string) $value === $shipping_value && (string) $correct !== $shipping_value ) {
+				return $correct;
+			}
+		}
+
+		return $correct;
+	}
+}
+
 if ( ! function_exists( 'fhs_register_checkout_address_defaults' ) ) {
 	function fhs_register_checkout_address_defaults() {
 		if ( ! has_filter( 'woocommerce_checkout_get_value', 'fhs_checkout_get_default_address_value' ) ) {
 			add_filter( 'woocommerce_checkout_get_value', 'fhs_checkout_get_default_address_value', 20, 2 );
 		}
 
-		if ( ! has_action( 'woocommerce_before_checkout_form', 'fhs_apply_default_addresses_to_customer' ) ) {
-			add_action( 'woocommerce_before_checkout_form', 'fhs_apply_default_addresses_to_customer', 5 );
+		if ( ! has_filter( 'woocommerce_checkout_get_value', 'fhs_guard_billing_from_shipping_value' ) ) {
+			add_filter( 'woocommerce_checkout_get_value', 'fhs_guard_billing_from_shipping_value', 999, 2 );
+		}
+
+		if ( ! has_action( 'woocommerce_before_checkout_billing_form', 'fhs_apply_billing_address_to_customer' ) ) {
+			// After ThemeHigh / other plugins on this hook (default 10).
+			add_action( 'woocommerce_before_checkout_billing_form', 'fhs_apply_billing_address_to_customer', 99 );
+		}
+
+		if ( ! has_action( 'woocommerce_before_checkout_shipping_form', 'fhs_apply_shipping_address_to_customer' ) ) {
+			add_action( 'woocommerce_before_checkout_shipping_form', 'fhs_apply_shipping_address_to_customer', 99 );
 		}
 	}
 }
