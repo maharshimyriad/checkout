@@ -2,7 +2,8 @@
 defined('ABSPATH') || exit;
 
 $user_shipping_addresses = [];
-$fulfilment_mode = '';
+$default_shipping_key    = '';
+$fulfilment_mode         = '';
 
 if (WC()->session) {
 	$fulfilment_mode = sanitize_key((string) WC()->session->get('fhs_fulfilment_method', ''));
@@ -16,12 +17,39 @@ if (!in_array($fulfilment_mode, ['delivery', 'pickup'], true)) {
 	$fulfilment_mode = '';
 }
 
+/**
+ * Read a saved ThemeHigh address field (shipping_* keys).
+ *
+ * @param array  $address   Saved address entry.
+ * @param string $field_key WooCommerce field key, e.g. shipping_city.
+ */
+$fhs_get_saved_shipping_field_value = static function (array $address, string $field_key): string {
+	if (isset($address[ $field_key ]) && '' !== (string) $address[ $field_key ]) {
+		return (string) $address[ $field_key ];
+	}
+
+	$short_key = preg_replace('/^shipping_/', '', $field_key);
+	if (is_string($short_key) && $short_key !== $field_key && isset($address[ $short_key ]) && '' !== (string) $address[ $short_key ]) {
+		return (string) $address[ $short_key ];
+	}
+
+	return '';
+};
+
 if (is_user_logged_in()) {
-	$raw = get_user_meta(get_current_user_id(), 'thwma_custom_address', true);
+	$raw  = get_user_meta(get_current_user_id(), 'thwma_custom_address', true);
 	$data = maybe_unserialize($raw);
+
+	if (!is_array($data)) {
+		$data = is_array($raw) ? $raw : [];
+	}
 
 	if (!empty($data['shipping']) && is_array($data['shipping'])) {
 		$user_shipping_addresses = $data['shipping'];
+	}
+
+	if (!empty($data['default_shipping'])) {
+		$default_shipping_key = (string) $data['default_shipping'];
 	}
 }
 ?>
@@ -137,6 +165,21 @@ if (is_user_logged_in()) {
 						}
 
 						$value = $checkout->get_value($key);
+
+						if (
+							$default_shipping_key
+							&& !empty($user_shipping_addresses[ $default_shipping_key ])
+							&& is_array($user_shipping_addresses[ $default_shipping_key ])
+						) {
+							$saved_value = $fhs_get_saved_shipping_field_value(
+								$user_shipping_addresses[ $default_shipping_key ],
+								$key
+							);
+							if ('' !== $saved_value) {
+								$value = $saved_value;
+							}
+						}
+
 						woocommerce_form_field($key, $field, $value);
 					}
 					?>
@@ -233,6 +276,60 @@ if (is_user_logged_in()) {
 		let syncGuardTimer = null;
 
 		const savedData = <?php echo wp_json_encode($user_shipping_addresses); ?>;
+		const defaultShippingKey = <?php echo wp_json_encode($default_shipping_key); ?>;
+		let selectedSavedShippingKey = defaultShippingKey || '';
+
+		const getSavedAddressFieldValue = function (address, field) {
+			if (!address) return '';
+			const shippingKey = 'shipping_' + field;
+			if (Object.prototype.hasOwnProperty.call(address, shippingKey) && address[shippingKey] !== '') {
+				return address[shippingKey];
+			}
+			if (Object.prototype.hasOwnProperty.call(address, field) && address[field] !== '') {
+				return address[field];
+			}
+			return '';
+		};
+
+		const applySavedAddress = function (key, options) {
+			const opts = options || {};
+			const silent = opts.silent === true;
+			const queueUpdate = opts.queueUpdate === true;
+
+			if (!key || key === 'same_as_billing' || !savedData[key]) {
+				return;
+			}
+
+			const selected = savedData[key];
+			selectedSavedShippingKey = key;
+
+			if (sameAsBilling) {
+				sameAsBilling.checked = false;
+			}
+
+			if (savedShipping) {
+				savedShipping.value = key;
+			}
+
+			const hiddenShippingKey = document.getElementById('thmaf_hidden_field_shipping');
+			if (hiddenShippingKey) {
+				hiddenShippingKey.value = key;
+			}
+
+			['first_name', 'last_name', 'address_1', 'city', 'postcode', 'country', 'state'].forEach(function (field) {
+				const input = document.getElementById('shipping_' + field);
+				const value = getSavedAddressFieldValue(selected, field);
+				if (!input) return;
+				input.value = value;
+				if (!silent) {
+					input.dispatchEvent(new Event('change', { bubbles: true }));
+				}
+			});
+
+			if (queueUpdate && window.jQuery) {
+				queueCheckoutUpdate();
+			}
+		};
 
 		const getSelectedShippingMethodInput = function (mode) {
 			const methods = Array.from(document.querySelectorAll('input[name^="shipping_method"]'));
@@ -337,6 +434,10 @@ if (is_user_logged_in()) {
 
 
 		const syncShippingStateWithBilling = function (options) {
+			if (!sameAsBilling || !sameAsBilling.checked) {
+				return;
+			}
+
 			const opts = options || {};
 			const silent = opts.silent === true;
 
@@ -411,8 +512,8 @@ if (is_user_logged_in()) {
 			savedShipping.addEventListener('change', function () {
 				const key = this.value;
 
-
 				if (key === 'same_as_billing') {
+					selectedSavedShippingKey = '';
 					if (sameAsBilling) {
 						sameAsBilling.checked = true;
 						syncShippingWithBilling();
@@ -421,25 +522,12 @@ if (is_user_logged_in()) {
 					return;
 				}
 
-				if (!key || !savedData[key]) return;
-				const selected = savedData[key];
-
-				if (sameAsBilling) {
-					sameAsBilling.checked = false;
+				if (!key || !savedData[key]) {
+					selectedSavedShippingKey = '';
+					return;
 				}
 
-				['first_name', 'last_name', 'address_1', 'city', 'postcode', 'country', 'state'].forEach(function (field) {
-					const input = document.getElementById('shipping_' + field);
-					const value = selected['shipping_' + field] || '';
-					if (!input) return;
-					input.value = value;
-					input.dispatchEvent(new Event('change', { bubbles: true }));
-				});
-
-				if (window.jQuery) {
-					window.jQuery(document.body).trigger('update_checkout');
-				}
-
+				applySavedAddress(key, { queueUpdate: true });
 				ensureBillingAddressEditable();
 			});
 		}
@@ -447,6 +535,10 @@ if (is_user_logged_in()) {
 		if (sameAsBilling) {
 			sameAsBilling.addEventListener('change', function () {
 				if (this.checked) {
+					selectedSavedShippingKey = '';
+					if (savedShipping) {
+						savedShipping.value = '';
+					}
 					syncShippingWithBilling();
 				}
 				ensureBillingAddressEditable();
@@ -500,6 +592,9 @@ if (is_user_logged_in()) {
 				setShippingMethodForMode(modeInput ? modeInput.value : '', true);
 				if (sameAsBilling && sameAsBilling.checked) {
 					syncShippingStateWithBilling({ silent: true });
+				} else if (selectedSavedShippingKey && savedData[selectedSavedShippingKey]) {
+					// Checkout AJAX replaces field markup with WC customer (often billing) values.
+					applySavedAddress(selectedSavedShippingKey, { silent: true });
 				}
 				ensureBillingAddressEditable();
 			});
@@ -507,6 +602,14 @@ if (is_user_logged_in()) {
 
 		setMode(modeInput && modeInput.value ? modeInput.value : '');
 		captureBillingState();
+
+		if (defaultShippingKey && savedData[defaultShippingKey]) {
+			if (savedShipping) {
+				savedShipping.value = defaultShippingKey;
+			}
+			applySavedAddress(defaultShippingKey, { silent: true });
+		}
+
 		ensureBillingAddressEditable();
 	});
 </script>
