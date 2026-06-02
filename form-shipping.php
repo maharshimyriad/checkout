@@ -102,14 +102,15 @@ if (is_user_logged_in()) {
 
 					unset($fields['shipping_address_2'], $fields['shipping_company']);
 
+					// Match WooCommerce / AU field order: country before state before suburb (city).
 					$shipping_field_order = [
-						'shipping_first_name'  => 10,
-						'shipping_last_name'   => 20,
-						'shipping_address_1'   => 30,
-						'shipping_city'        => 40,
-						'shipping_state'       => 50,
-						'shipping_postcode'    => 60,
-						'shipping_country'     => 70,
+						'shipping_first_name' => 10,
+						'shipping_last_name'  => 20,
+						'shipping_address_1'  => 30,
+						'shipping_country'    => 40,
+						'shipping_state'      => 45,
+						'shipping_city'       => 50,
+						'shipping_postcode'   => 65,
 					];
 
 					foreach ($fields as $key => $field) {
@@ -230,20 +231,6 @@ if (is_user_logged_in()) {
 			}
 		};
 
-		const toggleShippingFieldState = function (enabled) {
-			if (!deliveryPanel) {
-				return;
-			}
-
-			const shippingFields = deliveryPanel.querySelectorAll(
-				'input[name^="shipping_"], select[name^="shipping_"], textarea[name^="shipping_"], input[name="residential_delivery"], input[name="save_shipping_to_address_book"]'
-			);
-
-			shippingFields.forEach(function (field) {
-				field.disabled = !enabled;
-			});
-		};
-
 		const setMode = function (mode) {
 			if (!modeInput) {
 				return;
@@ -266,7 +253,8 @@ if (is_user_logged_in()) {
 				pickupPanel.style.display = activeMode === 'pickup' ? 'block' : 'none';
 			}
 
-			toggleShippingFieldState(activeMode === 'delivery');
+			// Do not disable shipping inputs — disabled fields are omitted from checkout AJAX
+			// and can cause billing suburb/state/postcode to mirror shipping incorrectly.
 			setShippingMethodForMode(activeMode);
 		};
 
