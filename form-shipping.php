@@ -9,6 +9,8 @@ defined('ABSPATH') || exit;
 
 require_once __DIR__ . '/fhs-address-defaults.php';
 
+$user_shipping_addresses = [];
+
 $fulfilment_mode = '';
 
 if (WC()->session) {
@@ -21,6 +23,16 @@ if (isset($_POST['fhs_fulfilment_method'])) {
 
 if (!in_array($fulfilment_mode, array('delivery', 'pickup'), true)) {
 	$fulfilment_mode = 'delivery';
+}
+
+
+if (is_user_logged_in()) {
+	$raw = get_user_meta(get_current_user_id(), 'thwma_custom_address', true);
+	$data = maybe_unserialize($raw);
+
+	if (!empty($data['shipping']) && is_array($data['shipping'])) {
+		$user_shipping_addresses = $data['shipping'];
+	}
 }
 ?>
 
