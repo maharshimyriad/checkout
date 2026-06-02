@@ -189,6 +189,7 @@ if (!in_array($fulfilment_mode, array('delivery', 'pickup'), true)) {
 
 		window.fhsSyncingShippingFromBilling = false;
 		window.fhsBlockCheckoutUpdate = false;
+		const savedData = <?php echo wp_json_encode($user_shipping_addresses); ?>;
 
 		function isSameAsBillingActive() {
 			return !!(sameAsBilling && sameAsBilling.checked);
