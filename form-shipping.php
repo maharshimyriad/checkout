@@ -218,6 +218,9 @@ document.addEventListener('DOMContentLoaded', function () {
 			if (window.fhsBlockCheckoutUpdate) {
 				return;
 			}
+			if (isSameAsBillingActive()) {
+				syncShippingFromBilling({ triggerCheckout: false });
+			}
 			window.fhsBlockCheckoutUpdate = true;
 			window.jQuery(document.body).one('updated_checkout.fhsSameAsBillingGuard', function () {
 				window.fhsBlockCheckoutUpdate = false;
@@ -299,10 +302,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		if (id.indexOf('billing_') !== 0) {
 			return;
 		}
-		// Silent sync only; one debounced checkout refresh for country/state.
-		syncShippingFromBilling({
-			triggerCheckout: id === 'billing_country' || id === 'billing_state'
-		});
+		syncShippingFromBilling({ triggerCheckout: true });
 	});
 
 	setMode(modeInput ? modeInput.value : 'delivery');
